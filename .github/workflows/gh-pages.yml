@@ -25,6 +25,8 @@ jobs:
         uses: peaceiris/actions-gh-pages@v3
         if: ${{ github.ref == 'refs/heads/docs' }}
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          deploy_key: ${{ secrets.ACTIONS_DEPLOY_KEY }}
+          external_repository: FirmWire/firmwire.github.io
+          publish_branch: gh-pages
           publish_dir: ./docs/book
           destination_dir: ./docs/
