@@ -1,6 +1,10 @@
 [book]
-authors = ["Dominik Maier"]
+authors = ["Team FirmWire"]
 language = "en"
 multilingual = false
 src = "src"
 title = "FirmWire"
+
+[output.html]
+git-repository-url = "https://github.com/FirmWire/FirmWire/"
+git-repository-icon = "fa-github"
