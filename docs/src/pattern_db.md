@@ -5,7 +5,7 @@ You you can think about FirmWire memory patterns as binary regexes tailored towa
 Once a pattern is found, FirmWire associates a symbol to the according pattern (in the simplest case), and, optionally executes lookup and post-lookup functions.
 The pattern itself are defined in the `pattern.py`-file present in the different vendor plugins.
 
-PatternDB is used at various places inside FirmWire: For finding MPU-tables during load-time, automatically resolving logging functions, or exporting symbols to the [Modkit](MODKIT.md), to just provide a few examples.
+PatternDB is used at various places inside FirmWire: For finding MPU-tables during load-time, automatically resolving logging functions, or exporting symbols to the [Modkit](modkit.md), to just provide a few examples.
 At the time of FirmWire's public release, we provide 18 patterns for Shannon-based modems and 9 for MediaTek-based modems, tested on a variety of firmware images.
 
 ## Pattern Syntax
