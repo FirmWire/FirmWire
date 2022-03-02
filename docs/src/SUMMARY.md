@@ -4,7 +4,7 @@
   - [Installation]()
   - [First Steps]()
 - [Overview](overview.md)
-- [Projects](projects.md)
+- [Workspaces](workspaces.md)
 - [PatternDB](pattern_db.md)
 - [Baseband ModKit](modkit.md)
 - [Interactive exploration](interactive.md)
