@@ -14,3 +14,6 @@ Presume you want to take a snapshot with the name `my_first_snapshot` at address
 For taking the snapshot from commandline, simply run `./firmwire.py --snapshot-at 0x464d5752,my_first_snapshot modem_file`.
 When using interactive exploration, you will have directly access to the python `machine` object via `self`. Make sure to stop execution at the desired address (for instance by setting a breakpoint), and then execute: `self.snapshot("my_first_snapshot")`. 
 Alternatively, if you don't want to manually steer execution, you can also use `self.snapshot_state_at_address(0x464d5752, "my_first_snapshot")`.
+
+For starting execution from this snapshot during the next start of FirmWire, all you will need to is `./firmwire.py --restore-snapshot my_first_snapshot modem_file`.
+If you use interactive exploration, you can even restore snapshots on-the-fly, without the need to restart the emulator! In this case, you would need to execute `self.restore_snapshot("my_first_snapshot")`
