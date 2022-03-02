@@ -24,7 +24,7 @@ This part of our documentation works as quick-reference to all the `firmwire.py`
 | `--fuzz-crashlog-dir FUZZ_CRASHLOG_DIR`       | [Fuzzing](fuzzing.md)                     | Folder to which logs of all testcases (length testcase) for a crashing run in persistent mode                    |
 | `--fuzz-crashlog-replay FUZZ_CRASHLOG_REPLAY` | [Fuzzing](fuzzing.md)                     | Replay a persistent-mode crash trace written with fuzz-crashcase-dir.                                            |
 | `--fuzz-state-addr-file FUZZ_STATE_ADDR_FILE` | [Fuzzing](fuzzing.md)                     | Textfile containing the hex-addresses of state-variables                                                         |
-| `--full-coverage`                             | [Fuzzing](fuzzing.md)]                    | Enable *full* coverage collection (logs every executed basic block)                                              |
+| `--full-coverage`                             | [Fuzzing](fuzzing.md)                     | Enable *full* coverage collection (logs every executed basic block)                                              |
 | `--shannon-loader-nv_data NV_DATA`            | TBD                                       | (Shannon only) Specify the NV_DATA to be used                                                                    |
 
 
@@ -36,12 +36,10 @@ Note: These arguments are mostly useful for development and debugging. As of now
 
 | Argument                  | Covered in | Description                                                                               |
 | ------------------------- | ---------- | ----------------------------------------------------------------------------------------- |
-| `dump-at DUMP_AT`         | TBD        | Dump the CPU state when the provided address is reached                                   |
-| `debug`                   | TBD        | Enable FirmWire debugging                                                                 |
+| `--dump-at DUMP_AT`       | TBD        | Dump the CPU state when the provided address is reached                                   |
+| `--debug`                 | TBD        | Enable FirmWire debugging                                                                 |
 | `--avatar-debug`          | TBD        | Enable debug logging for Avatar2                                                          |
 | `--avatar-debug-memory`   | TBD        | Enable Avatar2 remote memory debugging (useful when Peripherals crash)                    |
-|                           | TBD        |                                                                                           |
-|                           | TBD        |                                                                                           |
 | `--unassigned_access_log` | TBD        | Print log messages when memory accesses to undefined memory occur                         |
 | `--raw-asm-logging`       | TBD        | Print assembly basic blocks as QEMU executes them. Useful for determining infinite loops. |
 | `--trace-bb-translation`  | TBD        | Print the address of each new Basic Block, useful to eval BBs reached during fuzzing.     |
