@@ -9,6 +9,7 @@
 - [Baseband ModKit](modkit.md)
 - [Interactive exploration](interactive.md)
 - [Fuzzing](fuzzing.md)
+- [CLI Reference](cli_reference.md)
 - [Supporting a new vendor]()
   - [Building the loader]()
     - [Parsing the firmware into sections]()
