@@ -121,10 +121,15 @@ Currently, GuestLinks implementation only allows for commands from Python to the
 | GLINK_CALL_FUNC        | `gl.call_function(fn, args)`                                           | Call function `fn` with args specified in `args`. `fn` must be of type int, and `args` a list of `ints`. The return code of the function can later be retrieved from `gl.access`. |
 
 
-### GuestLink Tips & Tricks
+## Interactive exploration: Tips & Tricks
 
-#### Asynchronous behavior:
-When using any of the commands, keep in mind that GLink acts fully asynchronously, i.e., when calling a function from Python, the according command is only written to the shared MMIO region. The GLink task in the baseband then has to parse and process the command before the result is available.
+#### Stopping execution on startup
+
+FirmWire supports to stop after initialization. This means, you can interactively step through the full boot process, or control execution in a fine-grained manner after restoring a snapshot. All you need to do is to supply the `-S/--stop` flag to FirmWire on the command line.
+
+
+#### GuestLink: Asynchronous behavior:
+When using GuestLink, keep in mind that GLink acts fully asynchronously, i.e., when calling a function from Python, the according command is only written to the shared MMIO region. The GLink task in the baseband then has to parse and process the command before the result is available.
 
 For better understanding, we provide a typical guestlink usage example below, allocating a block of size 0x100, and storing the result into chunk_addr:
 
