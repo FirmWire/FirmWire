@@ -14,8 +14,8 @@ This part of our documentation works as quick-reference to all the `firmwire.py`
 | `--restore-snapshot SNAPSHOT_NAME`            | [Workspaces](workspaces.md)               | Name of snapshot to be restored                                                                                  |
 | `-t/--module INJECTED_TASK`                   | [Modkit](modkit.md)                       | Module / Task to be injected to the baseband modem                                                               |
 | `-S/--stop`                                   | [Interactive exploration](interactive.md) | Stop CPU after initializing the Machine. Useful for interactive exploration.                                     |
-| `--interactive`                               | [Interactive exploration](interactive.md) | Inject GLINK into the baseband for interactive exploration                                                       |
-| `--ipython-kernel`                            | [Interactive exploration](interactive.md) | Spawn an ipython remote kernel that can be connected to from another terminal using `jupyter console --existing` |
+| `-s/--gdb-server`                             | [Interactive exploration](interactive.md) | Start GDB server on TCP port. Default is 1234. NOTE: this is a minimal GDB stub.                                 |
+| `--console`                                   | [Interactive exploration](interactive.md) | Spawn an ipython remote kernel that can be connected to from another terminal using `jupyter console --existing` |
 | `--fuzz FUZZ`                                 | [Fuzzing](fuzzing.md)                     | Inject and invoke the passed AFL fuzz task module (headless).                                                    |
 | `--fuzz-input FUZZ_INPUT`                     | [Fuzzing](fuzzing.md)                     | Path the AFL test case (@@ should be sufficient) or just the path to a single test file.                         |
 | `--fuzz-triage FUZZ_TRIAGE`                   | [Fuzzing](fuzzing.md)                     | Invoke the fuzzer, but without an AFL front end. Enables debug hooks and saves code coverage.                    |
@@ -25,11 +25,9 @@ This part of our documentation works as quick-reference to all the `firmwire.py`
 | `--fuzz-state-addr-file FUZZ_STATE_ADDR_FILE` | [Fuzzing](fuzzing.md)                     | Textfile containing the hex-addresses of state-variables                                                         |
 | `--full-coverage`                             | [Fuzzing](fuzzing.md)                     | Enable *full* coverage collection (logs every executed basic block)                                              |
 | `--shannon-loader-nv_data NV_DATA`            | TBD                                       | (Shannon only) Specify the NV_DATA to be used                                                                    |
+| `--mtk-loader-nv_data NV_DATA`                | TBD                                       | (MediaTek only) Specify the NV_DATA to be used                                                                   |
 
-
-
-
-## firmwire_dev.py arguments
+## Developer options
 
 Note: These arguments are mostly useful for development and debugging. As of now, they are part of `firmwire.py`, but will be moved to a custom `firmwire_dev.py` interface to clearly distinguish developer and user features in a future iteration of FirmWire.
 
@@ -39,6 +37,6 @@ Note: These arguments are mostly useful for development and debugging. As of now
 | `--debug-peripheral`      | TBD        | Enable debugging for specified peripheralas                                               |
 | `--avatar-debug`          | TBD        | Enable debug logging for Avatar2                                                          |
 | `--avatar-debug-memory`   | TBD        | Enable Avatar2 remote memory debugging (useful when Peripherals crash)                    |
-| `--unassigned_access_log` | TBD        | Print log messages when memory accesses to undefined memory occur                         |
+| `--unassigned-access-log` | TBD        | Print log messages when memory accesses to undefined memory occur                         |
 | `--raw-asm-logging`       | TBD        | Print assembly basic blocks as QEMU executes them. Useful for determining infinite loops. |
 | `--trace-bb-translation`  | TBD        | Print the address of each new Basic Block, useful to eval BBs reached during fuzzing.     |

@@ -19,30 +19,24 @@ To exemplify this, let's assume you want to add `mymod` to the mods available fo
 
 Before modification, the relevant section in the Makefile should look something like this:
 ```
-MODS := gsm_mm gsm_gmm gsm_sm gsm_cc lte_rrc lte_tcpip glink
+MODS := gsm_mm gsm_sm gsm_cc lte_rrc glink
 
-gsm_ss_SRC := fuzzers/gsm_ss.c afl.c
 gsm_mm_SRC := fuzzers/gsm_mm.c afl.c
 gsm_cc_SRC := fuzzers/gsm_cc.c afl.c
-gsm_gmm_SRC := fuzzers/gsm_gmm.c afl.c
 gsm_sm_SRC := fuzzers/gsm_sm.c afl.c
 lte_rrc_SRC := fuzzers/lte_rrc.c afl.c
-lte_tcpip_SRC := fuzzers/lte_tcpip.c afl.c
 glink_SRC := glink.c
 ```
 
 Assuming you have your source code in `mymod.c`, this part of the Makefile should look as follows after modification:
 
 ```
-MODS := gsm_mm gsm_gmm gsm_sm gsm_cc lte_rrc lte_tcpip glink mymod
+MODS := gsm_mm gsm_sm gsm_cc lte_rrc glink mymod
 
-gsm_ss_SRC := fuzzers/gsm_ss.c afl.c
 gsm_mm_SRC := fuzzers/gsm_mm.c afl.c
 gsm_cc_SRC := fuzzers/gsm_cc.c afl.c
-gsm_gmm_SRC := fuzzers/gsm_gmm.c afl.c
 gsm_sm_SRC := fuzzers/gsm_sm.c afl.c
 lte_rrc_SRC := fuzzers/lte_rrc.c afl.c
-lte_tcpip_SRC := fuzzers/lte_tcpip.c afl.c
 glink_SRC := glink.c
 mymod_SRC := mymod.c
 ```
@@ -54,6 +48,7 @@ After this tiny modifications, your mod should be compiled as well when running 
 To further exemplify how the modkit is used, let's look at a very basic task: The `hello_world` task for MTK basebands.
 
 The source code for this task looks as follows:
+
 ```C
 #include <task.h>
 #include <modkit.h>
