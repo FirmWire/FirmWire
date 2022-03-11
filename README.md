@@ -1,11 +1,26 @@
+<pre align="center">
+              ___            __      __                         
+-.     .-.   | __|(+) _ _ _ _\ \    / /(+) _ _ ___    .-.     .-
+  \   /   \  | _|  | | '_| '  \ \/\/ /  | | '_/ -_)  /   \   /  
+   '-'     '-|_|   | |_| |_|_|_\_/\_/   | |_| \___|-'     '-'   
+             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~             
+</pre>
+
 # FirmWire
 
-<a href="https://github.com/FirmWire/FirmWire/blob/main/firmwire-ndss22.pdf?raw=true"> <img title="" src="https://user-images.githubusercontent.com/3030665/149030164-2adf65b2-114a-4f07-82ea-67cf1f65edef.png" alt="FirmWire thumbnail" align="right" width="200"></a>
-FirmWire is a full-system baseband firmware emulation platform that supports Samsung and MediaTek. It enables fuzzing, root-cause analysis, and debugging of baseband firmware images. The emulator code will be available on the day of the presentation at NDSS in early March 2022.
+FirmWire is a full-system baseband firmware analysis platform that supports Samsung and MediaTek. It enables fuzzing, root-cause analysis, and debugging of baseband firmware images. **See the [FirmWire documentation](https://firmwire.github.io/docs/installation.html) to get started!**
 
-See the [paper](https://github.com/FirmWire/FirmWire/blob/main/firmwire-ndss22.pdf?raw=true) for more details.
+> **Experiments & Missing Parts?**
+>> Upon a vendor's request, the current public release of FirmWire is a preview version omitting some of the functionality described in the paper.
+We will publish the full version and automated scripts to replicate our experiments during NDSS'22 (April 24th-28th).
 
 ## BibTeX
+<a href="https://hernan.de/research/papers/firmwire-ndss22-hernandez.pdf"> <img title="" src="https://user-images.githubusercontent.com/3030665/149030164-2adf65b2-114a-4f07-82ea-67cf1f65edef.png" alt="FirmWire thumbnail" align="right" width="200"></a>
+FirmWire is the result of a multi-year, cross university research effort.
+See the [paper](https://hernan.de/research/papers/firmwire-ndss22-hernandez.pdf) for more details.
+
+If you are using FirmWire in an academic paper please use this to cite it:
+
 ```
 @inproceedings{hernandez_firmwire_2022,
   title = {{FirmWire: Transparent Dynamic Analysis for Cellular Baseband Firmware}},
