@@ -1,8 +1,8 @@
 [FirmWire](./README.md)
 
-- [Overview](overview.md)
 - [Installation](installation.md)
 - [Quick Start](quick_start.md)
+- [Background](background.md)
 - [CLI Reference](cli_reference.md)
 - [Workspaces](workspaces.md)
 - [PatternDB](pattern_db.md)

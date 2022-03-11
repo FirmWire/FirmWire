@@ -1,4 +1,4 @@
-# Overview
+# Technical Background 
 
 FirmWire is a baseband analysis platform. As input, it takes a baseband firmware image and tries to create an emulation environment for this image on-the-fly. 
 
@@ -6,7 +6,7 @@ FirmWire is a baseband analysis platform. As input, it takes a baseband firmware
 
 The Emulation Core of FirmWire is built on top of [avatar2](https://github.com/avatartwo/avatar2) and [PANDA](https://github.com/panda-re/panda/).
 The core emulation capabilities are provided by PANDA, while avatar2 is used as middleware to orchestrate the execution state of the emulator, including spin-up, breakpoint registration, and starting/stopping of the emulation.
-Additionally, we use avatar2's Python Peripherals to implement [Peripherals](TODO) which react on Memory-Mapped I/O accesses.
+Additionally, we use avatar2's Python Peripherals to implement peripherals which react on Memory-Mapped I/O accesses.
 
 Under the hood, FirmWire implements vendor specific _machines_ which use avatar2's PyPanda target to embed PANDA as dynamic library in the same process space as the Python Interpreter keeping the required inter-process communication for FirmWire to a bare minimum.
 
@@ -18,3 +18,7 @@ This JSON file is then passed on to PANDA, which uses it to register and emulate
 
 Inside FirmWire, we use the configurable machine to create the emulation environments for the target baseband images on-the-fly.
 In more detail, our loader is responsible for parsing a binary firmware file and automatically extracting the required memory mappings, for instance by finding pre-defined MPU tables within the binary image.
+
+# This Manual
+
+The rest of this manual will guide you through FirmWire from a user's perspective. In case you interested in developing or extending the core functionality of FirmWire, please stay tuned. Alternatively, you can dig through the source code, or reach out to us - we are happy to provide additional information wherever needed!
