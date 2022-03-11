@@ -72,4 +72,73 @@ For Shannon basebands, the interactive capabilities are further extended by the 
 
 ## GuestLink (Shannon only)
 
-The GuestLink is a combination of custom task injected into the baseband and python peripheral, allowing for _interaction_ with the emulated baseband.
+The GuestLink is a combination of custom task injected into the baseband and python peripheral, allowing for _interaction_ with the emulated baseband. To make use of it, start FirmWire both with activated console and injected `glink` task:
+
+```
+./firmwire.py -t glink --console ./modem.bin
+```
+
+Now, after connecting to the console as described above, you can get a handle to the glink peripheral:
+
+```
+In [1]: gl = self.get_peripheral('glink')
+```
+
+This GLink peripheral can be controlled from Python and uses a MMIO range to communicated with the GLink task.
+More specifically, the MMIO range is organized as follows:
+ 
+```C
+struct glink_peripheral {
+  uint32_t access;
+  uint32_t tx_head;
+  uint32_t tx_tail;
+  uint32_t rx_head;
+  uint32_t rx_tail;
+  uint8_t tx_fifo[TX_FIFO_SIZE];
+  uint8_t rx_fifo[RX_FIFO_SIZE];
+} ;
+```
+
+The `access` field is used to communicate return values from the GLink task back to the Python peripheral, while the rest are data structures for input and output FIFO buffers.
+These buffers use a simple packet-based data format for communication:
+
+```C
+struct glink_cmd_header {
+  uint8_t cmd;
+  uint8_t len;
+  // next field is variable amount of octets
+};
+```
+
+Currently, GuestLinks implementation only allows for commands from Python to the emulated baseband. The available commands are:
+
+| CMD                    | PythonAPI                                                              | Description                                                                                                                                                                       |
+| ---------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GLINK_SEND_QUEUE_INDIR | `gl.send_queue(True, src_qid_name, dst_qid_name, msg_group, payload)`  | Sends specified message to baseband internal queue. Payload is provided as allocated memory chunk, to be free'd by the baseband.                                                  |
+| GLINK_SEND_QUEUE       | `gl.send_queue(False, src_qid_name, dst_qid_name, msg_group, payload)` | Sends specified message to baseband internal queue. Payload is inlined with the msg_struct.                                                                                       |
+| GLINK_SET_EVENT        | `gl.set_event(event)`                                                  | Sets the baseband internal event. `event` can either be int (event number) or bytes (event name).                                                                                 |
+| GLINK_ALLOC_BLOCK      | `gl.create_block(size)`                                                | Allocate a chunk of memory of given `size`. The address of the chunk can later be retrieved via `gl.access`.                                                                      |
+| GLINK_CALL_FUNC        | `gl.call_function(fn, args)`                                           | Call function `fn` with args specified in `args`. `fn` must be of type int, and `args` a list of `ints`. The return code of the function can later be retrieved from `gl.access`. |
+
+When using any of these commands, keep in mind that GLink acts fully asynchronously, i.e., when calling a function from Python, the according command is only written to the shared MMIO region. The GLink task in the baseband then has to parse and process the command before the result is available.
+
+For better understanding, we provide a typical guestlink usage example below, allocating a block of size 0x100, and storing the result into chunk_addr:
+
+```Python
+In [1]: self.qemu.stop()
+In [2]: gl = self.get_peripheral('glink')
+In [3]: gl.create_block(0x100)
+In [4]: self.run_for(0.5)
+In [5]: chunk_addr = gl.access
+In [6]: hex(chunk_addr)
+Out[6]: '0x44f0293c'
+```
+
+
+
+
+
+
+
+
+
