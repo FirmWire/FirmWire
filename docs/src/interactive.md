@@ -120,7 +120,11 @@ Currently, GuestLinks implementation only allows for commands from Python to the
 | GLINK_ALLOC_BLOCK      | `gl.create_block(size)`                                                | Allocate a chunk of memory of given `size`. The address of the chunk can later be retrieved via `gl.access`.                                                                      |
 | GLINK_CALL_FUNC        | `gl.call_function(fn, args)`                                           | Call function `fn` with args specified in `args`. `fn` must be of type int, and `args` a list of `ints`. The return code of the function can later be retrieved from `gl.access`. |
 
-When using any of these commands, keep in mind that GLink acts fully asynchronously, i.e., when calling a function from Python, the according command is only written to the shared MMIO region. The GLink task in the baseband then has to parse and process the command before the result is available.
+
+### GuestLink Tips & Tricks
+
+#### Asynchronous behavior:
+When using any of the commands, keep in mind that GLink acts fully asynchronously, i.e., when calling a function from Python, the according command is only written to the shared MMIO region. The GLink task in the baseband then has to parse and process the command before the result is available.
 
 For better understanding, we provide a typical guestlink usage example below, allocating a block of size 0x100, and storing the result into chunk_addr:
 
@@ -134,11 +138,15 @@ In [6]: hex(chunk_addr)
 Out[6]: '0x44f0293c'
 ```
 
+#### GuestLink & Snapshots:
+When using GLink in combination with snapshots, it is important to note that a reference to the guest link peripheral does not propagate across snapshots. That means, after restoring a snapshot, a new reference to the GLink peripheral has to be required via `get_peripheral`, as shown below:
 
-
-
-
-
-
-
-
+```Python
+In [1]: gl = self.get_peripheral('glink')
+In [2]: gl
+Out[2]: <firmwire.hw.glink.GLinkPeripheral at 0x7f720c4f59d0>
+In [3]: self.restore_snapshot("glink_demo")
+In [3]: gl = self.get_peripheral('glink')
+In [4]: gl 
+Out[4]: <firmwire.hw.glink.GLinkPeripheral at 0x7f7219792850>`
+```
