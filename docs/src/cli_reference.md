@@ -1,6 +1,6 @@
 # Command Line Interface Reference
 
-This part of our documentation works as quick-reference to all the `firmwire.py` and `firmwire_dev.py` CLI arguments, and provides links about where they are covered.
+This part of our documentation works as quick-reference to all the `firmwire.py` and `firmwire_dev.py` CLI arguments, and provides links about where they are covered. For more information about the single command line flags, you can also run FirmWire with the `--help` flag.
 
 ## firmwire.py arguments
 
