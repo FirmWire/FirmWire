@@ -7,7 +7,6 @@ This part of our documentation works as quick-reference to all the `firmwire.py`
 | Argument                                      | Covered in                                | Description                                                                                                      |
 | --------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `modem_file`                                  | [Getting Started](getting_started.md)     | The modem file FirmWire shall create an emulation environment for. Only mandatory argument(!)                    |
-| `--random-ports`                              | [Getting Started](getting_started.md)     | Choose random ports for any listening sockets (e.g. QEMU's GDB & QMP).                                           |
 | `--consecutive-ports CONSECUTIVE_PORTS`       | [Getting Started](getting_started.md)     | Choose consecutive ports for the any listening sockets (e.g. QEMU's GDB & QMP), starting with the port provided. |
 | `-h/--help`                                   | [CLI reference](cli_reference.md)         | Show help for for different cli flags on commandline                                                             |
 | `-w/--workspace WORKSPACE`                    | [Workspaces](workspaces.md)               | Path to the workspace to use                                                                                     |
@@ -36,23 +35,10 @@ Note: These arguments are mostly useful for development and debugging. As of now
 
 | Argument                  | Covered in | Description                                                                               |
 | ------------------------- | ---------- | ----------------------------------------------------------------------------------------- |
-| `--dump-at DUMP_AT`       | TBD        | Dump the CPU state when the provided address is reached                                   |
 | `--debug`                 | TBD        | Enable FirmWire debugging                                                                 |
+| `--debug-peripheral`      | TBD        | Enable debugging for specified peripheralas                                               |
 | `--avatar-debug`          | TBD        | Enable debug logging for Avatar2                                                          |
 | `--avatar-debug-memory`   | TBD        | Enable Avatar2 remote memory debugging (useful when Peripherals crash)                    |
 | `--unassigned_access_log` | TBD        | Print log messages when memory accesses to undefined memory occur                         |
 | `--raw-asm-logging`       | TBD        | Print assembly basic blocks as QEMU executes them. Useful for determining infinite loops. |
 | `--trace-bb-translation`  | TBD        | Print the address of each new Basic Block, useful to eval BBs reached during fuzzing.     |
-| `--heatmap`               | TBD        | Run the heatmap analyzer                                                                  |
-| `--packet-log PACKET_LOG` | TBD        | Log PAL packets to the provided file                                                      |
-| `--fuzz-heatmap`          | TBD        | Generate heatmap data over fuzzing runs (SLOW!)                                           |
-                        
-
-## Deprecated CLI arguments
-
-The following flags have been used during FirmWire development, and are deprecated by now. They may be removed in future iterations of FirmWire.
-
-| Argument                                            | Deprecation Reason     |
-| --------------------------------------------------- | ---------------------- |
-| `--avatar-output-directory AVATAR_OUTPUT_DIRECTORY` | Handled via Workspaces |
-| `--snapshot-dir SNAPSHOT_DIR`                       | Handled via Workspaces |
