@@ -1,6 +1,6 @@
 # Overview
 
-FirmWire is a baseband analysis platform.
+FirmWire is a baseband analysis platform. As input, it takes a baseband firmware image and tries to create an emulation environment for this image on-the-fly. 
 
 # Emulation Core
 
@@ -18,7 +18,3 @@ This JSON file is then passed on to PANDA, which uses it to register and emulate
 
 Inside FirmWire, we use the configurable machine to create the emulation environments for the target baseband images on-the-fly.
 In more detail, our loader is responsible for parsing a binary firmware file and automatically extracting the required memory mappings, for instance by finding pre-defined MPU tables within the binary image.
-
-# Controlling emulation
-
-# Interactive exploration
