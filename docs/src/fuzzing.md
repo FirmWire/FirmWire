@@ -33,14 +33,14 @@ void fuzz_single()
 First, `shannon.h` is included to provide shannon specific convenience functions (e.g. `uart_puts` and `pal_MemAlloc`).
 Then, `afl.h` is included, which provides the main functionality and API for fuzzing. The API is a slightly modified version as the one given by TriforceAFL and provides following four functions:
 
-| Function                                                      | Purpose                                                                                                                                                             |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `char * getWork(unsigned int *sizep)`                         | Returns a buffer with fuzzing input and stores the input size into `sizep`.                                                                                         |
-| `int startWork(unsigned int start, unsigned int end)`         | Start a fuzzing execution, while collecting coverage for code residing between `start` and `end`.                                                                   |
-| `int doneWork(int val)`                                       | Mark the end of a fuzzing iteration, providing `val` as return code to the fuzzer.                                                                                  |
-| `int startForkserver(int ticks, unsigned int persistent_cnt)` | Starts AFL forkserver. `ticks` controls whether qemu ticks should be enabled or not. `persistent_count` is deprecated and now controlled via an environment variable. |
+| Function                                                      | Purpose                                                                                           |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `char * getWork(unsigned int *sizep)`                         | Returns a buffer with fuzzing input and stores the input size into `sizep`.                       |
+| `int startWork(unsigned int start, unsigned int end)`         | Start a fuzzing execution, while collecting coverage for code residing between `start` and `end`. |
+| `int doneWork(int val)`                                       | Mark the end of a fuzzing iteration, providing `val` as return code to the fuzzer.                |
+| `int startForkserver(int ticks)` | Starts AFL forkserver. `ticks` controls whether qemu ticks should be enabled or not.              |
 
-Besides this API, the `afl.h` file also provides the basic skeleton for the fuzzing loop inside a `task_main` function:
+Besides this API, the `afl.h`/`afl.c` files also provides the basic skeleton for the fuzzing loop inside a `task_main` function:
 
 ```C
 void task_main() {
@@ -148,22 +148,49 @@ Our [lte_rrc](https://github.com/FirmWire/FirmWire/blob/main/modkit/shannon/fuzz
 ## Controlling the fuzzing process
 
 Writing the fuzzing harness is only the first step; the second is to actually start the fuzzer.
-FirmWire requires, at its minimum, two additional commandline flags to facilitate fuzzing: `--fuzz` and `--fuzz-input`.
+FirmWire requires, at its minimum, two additional command line flags to facilitate fuzzing: `--fuzz` and `--fuzz-input`.
 The first one will cause FirmWire to be started in fuzzing mode. This disables console output, debugging hooks, and similar to achieve maximum performance during fuzzing.
 The latter flag advises FirmWire where it can find the current fuzzing input, and this is usually provided by AFL itself.
-A full commandline for starting fuzzing, on the example of `gsm_cc` would look like this:
+A full command line for starting fuzzing, on the example of `gsm_cc` would look like this:
 ```
 $ afl-fuzz -i in -o out -U -- ./firmwire.py --restore-snapshot fuzz_base --fuzz gsm_cc --fuzz-input @@ modem.bin
 ```
 
-Assuming you have some seed inputs in the `in` directory, this commandline should bring you directly to the AFL++ window.
+Assuming you have some seed inputs in the `in` directory, this command line should bring you directly to the AFL++ window.
 Note how we used a snapshot here? As the boot time of the modem is quite long, AFL++ would timeout without these snapshot.
 If you would like to fuzz without using the snapshot, we recommend to set the `AFL_FORKSRV_INIT_TMOUT` environment variable to a high value.
 
 ## Persistent Mode
 
+Besides the `fuzz-mode`, FirmWire provides another option for further improving fuzzing throughput: persistent-mode fuzzing.
+Instead of re-forking after every single fuzzing input, the emulator can process multiple inputs in a loop, re-forking only every N iterations.
+From a programming perspective, this basically just means that `fuzz_single()` is invoked multiple times, and FirmWire keeps track of how many inputs were processed before issuing a new fork.
+
+To use persistent mode, the command line only needs to be extended with `--fuzz-persistent N`. This means, when wanting to fuzz for 1000 iterations before re-forking, the command line above needs to be modified as follows:
+```
+$ afl-fuzz -i in -o out -U -- ./firmwire.py --restore-snapshot fuzz_base --fuzz gsm_cc --fuzz-input @@ --fuzz-persistent 1000 modem.bin
+```
+
+To further improve persistent mode, we provide one additional feature: a persistent test case log.
+Usually, upon crash, only the last input is saved by AFL++, as it assumes that the target state between two fuzz iterations did not change.
+As baseband firmware is highly stateful, we cautiously violate this assumption during persistent fuzzing.
+
+To not loose precious input during fuzzing which brings the baseband into different states, we also provide a `--fuzz-crashlog-dir` command line flag.
+The argument to this flag should point to a directory. Upon crash, all inputs used in the according persistent iteration are stored into a file within this given directory.
 
 ## Replaying Inputs
 
+During fuzzing, you may encounter some crashes or timeouts. But how to analyze them?
 
-Happy Fuzzing
+FirmWire brings a `--fuzz-triage` flag, which allows replaying of fuzzing inputs for a specific harness, while keeping logging output enabled.
+The following command line will replay a test case called `crash.bin`, located in the same directory:
+
+```
+$ ./firmwire.py --restore-snapshot fuzz_base --fuzz-triage gsm_cc --fuzz-input ./crash.bin modem.bin
+```
+
+Note that the fuzz-triage mode can also be coupled with different interactive capabilities (e.g., gdb) to facilitate root cause analysis.
+
+Lastly, it is also possible to replay persistent crashlogs collected with `--fuzz-crashlog-dir`. This can be done by selecting the desired crashlog via `--fuzz-crashlog-replay`. 
+
+### Happy Fuzzing!
