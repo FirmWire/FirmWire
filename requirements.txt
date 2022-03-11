@@ -1,0 +1,25 @@
+# Orchestration
+avatar2>=1.4.2
+
+# Interactive kernel mode
+ipykernel==5.5.0
+ipython==7.13.0
+ipython-genutils==0.2.0
+jedi==0.15.2
+jupyter-client==7.1.2
+jupyter-console==6.4.3
+jupyter-core==4.9.2
+
+# Decompressing Shannon modem.bin containers
+lz4
+# Parsing injectable modules
+pyelftools
+# Downloading firmware
+requests
+# MTK required
+filetype
+rocksdb
+# Below required for pypanda
+cffi
+protobuf
+colorama

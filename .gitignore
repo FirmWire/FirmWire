@@ -1,0 +1,9 @@
+# Python junk
+__pycache__
+
+# Vim junk
+*swp
+*swo
+
+# Firmware
+*_workspace/
