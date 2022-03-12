@@ -3,9 +3,9 @@
 The recommended way of using FirmWire is by using the supplied [Dockerfile](https://github.com/FirmWire/FirmWire/blob/main/Dockerfile). To build the docker file, execute the following commands:
 
 ```
-git clone git@github.com:FirmWire/FirmWire.git
+git clone https://github.com/FirmWire/FirmWire.git
 cd FirmWire
-git clone git@github.com:FirmWire/panda.git
+git clone https://github.com/FirmWire/panda.git
 
 # This will take some time
 docker build -t firmwire .
