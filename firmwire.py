@@ -331,6 +331,9 @@ def main() -> int:
 
     log.info("Machine initialization time took %.2f seconds", machine.time_running())
 
+    if args.restore_snapshot:
+        machine.restore_snapshot(args.restore_snapshot)
+
     # MUST come after initialization (needs a valid QEMU instance)
     if args.snapshot_at:
         machine.snapshot_state_at_address(
@@ -339,9 +342,6 @@ def main() -> int:
             reason="Snapshot at command line",
             once=True,
         )
-
-    if args.restore_snapshot:
-        machine.restore_snapshot(args.restore_snapshot)
 
     # machine logging
     if machine.qemu.protocols.remote_memory:
