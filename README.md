@@ -10,6 +10,10 @@
 
 FirmWire is a full-system baseband firmware analysis platform that supports Samsung and MediaTek. It enables fuzzing, root-cause analysis, and debugging of baseband firmware images. **See the [FirmWire documentation](https://firmwire.github.io/docs/installation.html) to get started!**
 
+<p align="center">
+<img width="750" src="https://user-images.githubusercontent.com/3030665/158176187-97265e7b-bf7c-41d8-a5b2-fbbadbfe25d6.gif" />
+</p>
+
 > **Experiments & Missing Parts?**
 >> Upon a vendor's request, the current public release of FirmWire is a preview version omitting some of the functionality described in the paper.
 We will publish the full version and automated scripts to replicate our experiments during NDSS'22 (April 24th-28th).
