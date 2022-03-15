@@ -9,3 +9,4 @@
 - [Baseband ModKit](modkit.md)
 - [Interactive exploration](interactive.md)
 - [Fuzzing](fuzzing.md)
+- [Trophy Wall](trophy_wall.md)
