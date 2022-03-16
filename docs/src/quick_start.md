@@ -26,7 +26,7 @@ $ ./firmwire.py --consecutive-ports 10000 modem.bin
 
 ### MediaTek
 
-* Samsung A10s (MT6262)
+* Samsung A10s (MT6762)
 * Samsung A41 (MT6768)
 
 ### Shannon
