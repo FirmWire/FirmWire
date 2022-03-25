@@ -1306,7 +1306,6 @@ class MTKFSD:
 
     def _op_CREATEDIR(self, args):
         dirname = self._convert_path(args[0])
-        ret = FSError.GENERAL_FAILURE
 
         if not self._is_dir(dirname):
             try:
