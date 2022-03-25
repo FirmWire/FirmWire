@@ -1310,8 +1310,8 @@ class MTKFSD:
         if not self._is_dir(dirname):
             try:
                 os.makedirs(dirname)
-            except OSError as error:
-                self.log.error("creatdir: error %s", e)
+            except OSError as e:
+                self.log.error("createdir: error %s", e)
                 # TODO: real error codes
                 return FSError.GENERAL_FAILURE, []
         return FSError.NO_ERROR, []
