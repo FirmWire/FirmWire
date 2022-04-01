@@ -1303,3 +1303,15 @@ class MTKFSD:
         self.log.warning("Restore: %s stub!", path)
 
         return FSError.NO_ERROR, []
+
+    def _op_CREATEDIR(self, args):
+        dirname = self._convert_path(args[0])
+
+        if not self._is_dir(dirname):
+            try:
+                os.makedirs(dirname)
+            except OSError as e:
+                self.log.error("createdir: error %s", e)
+                # TODO: real error codes
+                return FSError.GENERAL_FAILURE, []
+        return FSError.NO_ERROR, []
