@@ -52,7 +52,7 @@ COMMON_DEP := $(addprefix $(BUILD_DIR)/, $(COMMON_SRC:.c=.d))
 
 #######################################
 
-MODS := hello_world
+MODS := hello_world msg_inject_test
 
 # Pending embargo
 #MODS := msg_inject_test lte_rrc
@@ -60,7 +60,7 @@ MODS := hello_world
 hello_world_SRC := hello_world.c
 
 # Pending embargo
-#msg_inject_test_SRC := msg_inject_test.c
+msg_inject_test_SRC := msg_inject_test.c
 #lte_rrc_SRC := fuzzers/lte_rrc.c afl.c
 
 #######################################
