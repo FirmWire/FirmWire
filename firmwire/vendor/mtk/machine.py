@@ -170,7 +170,7 @@ class MT6878Machine(FirmWireEmu):
 
         # For Fuzzing Task Setup
         self.playground = self.avatar.add_memory_range(
-            0x9F400000, 0x10000, name="PLAYGROUND_RWX_REGION", permissions="rwx"
+            0x9F900000, 0x10000, name="PLAYGROUND_RWX_REGION", permissions="rwx"
         )
         # import IPython; IPython.embed()
         assert self.playground is not None

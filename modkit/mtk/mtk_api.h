@@ -20,18 +20,18 @@ typedef struct local_para_struct {
    uint8_t	ref_count; 
    uint8_t  lp_reserved; 
    uint16_t	msg_len;
-   char payload[0]
+   char payload[0];
 } local_para_struct;
 
 // convience bindings for local_para alloc/free functions
 
 
 // params: size, resettable, src_file, line
-MODKIT_FUNCTION_SYMBOL(void *, construct_int_local_para, uint16_t, uint32_t, char *, uint32_t)
+MODKIT_FUNCTION_SYMBOL(void *, construct_int_local_para, uint16_t, uint32_t, const char *, uint32_t)
 #define alloc_local_para(size) (construct_int_local_para(size, 0, TASK_NAME, 0))
 
 // params: local_para_ptr, src_file, line
-MODKIT_FUNCTION_SYMBOL(void, free_int_local_para, local_para_struct *, char *, uint32_t)
+MODKIT_FUNCTION_SYMBOL(void, free_int_local_para, local_para_struct *, const char *, uint32_t)
 #define free_local_para(local_para) (free_int_local_para(local_para, TASK_NAME, 0))
 
 // Main interface to send message.
