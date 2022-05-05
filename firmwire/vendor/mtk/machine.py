@@ -60,6 +60,10 @@ class MT6878Machine(FirmWireEmu):
                 )
                 return None
 
+        # Fast exit should only be enabled when fuzzing under AFL, not triaging
+        if args.fuzz:
+            os.environ["AFL_FAST_EXIT"] = "1"
+
         avatar = self.avatar
 
         self.ports["qemu_gdb"] = 3333

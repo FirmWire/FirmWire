@@ -174,6 +174,9 @@ class MTKLoader(firmwire.loader.Loader):
             )
             return False
 
+        if len(os.listdir(sub_path)) == 0:
+            log.warning("NV data directory looks empty. Modem will try to recover and create defaults...")
+
         log.info("Using NV data from %s", nv_data_path)
 
         # resolve patterns
