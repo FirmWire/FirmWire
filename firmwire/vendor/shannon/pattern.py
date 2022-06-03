@@ -51,7 +51,10 @@ PATTERNS = {
         # 30 b5 04 46 85 b0 df 4b 40 f2 02 30 00 22 00 90 11 46 01 a8 0e f1 54 ee dd f8 04 c0 bc f1 00 0f 1c d0 00 25 01 21 03 ab 2a 46 0c f1 38 00 00 95 65 f4 1a f1 01 98 29 46 8b f1 a8 ed 01 98 01 22 00 23 11 46 00 94 5b f1 58 ed 01 98 8b f1 2e ec cd 49 40 f2 13 32 01 98 8b f1 a0 ed f0 f4 a1 f0 00 28 02 d0 02 a8 ff f7 1a fe 05 b0 30 bd
     },
     "log_printf": {
-        "pattern": "0fb4 2de9f047 ???? ??98 d0e90060 c0f34815",
+        "pattern": [
+            "0fb4 2de9f047 ???? ??98 d0e90060 c0f34815",
+            "0f b4 10 b5 03 a9 02 98 ff f7 9a ff 10 bc 5d f8 14 fb",
+        ],
         "required": True,
     },
     # log_printf_debug
@@ -97,14 +100,14 @@ PATTERNS = {
     },
     "DSP_SYNC_WORD_0": {
         "pattern": [
-            "??21??68 4ff4??72 884202d1 ??689042 07d0 ??23??a0 cde90003 ??????a0 ???????? ???????? ???????? ??b0bde8 f0 ??",
+            "??21??68 4ff4??72 884202d1 ??689042 07d0 ??23??a0 cde90003 ??????a0 ?* ??b0bde8 f0 ??",
         ],
         "post_lookup": handlers.get_dsp_sync0,
         "required": False,
     },
     "DSP_SYNC_WORD_1": {
         "pattern": [
-            "4ff4??72 884202d1 ??689042 07d0 ??23??a0 cde90003 ??????a0 ???????? ???????? ???????? ??b0bde8 f0 ??",
+            "4ff4??72 884202d1 ??689042 07d0 ??23??a0 cde90003 ??????a0 ?* ??b0bde8 f0 ??",
         ],
         "offset": 2,
         "offset_end": 3,
