@@ -873,7 +873,8 @@ r12: %08x     cpsr: %08x""" % (
         elif self.modem_soc.name == "S337AP":
             # This is a hack to prevent a memclr of the SHM region
             # The clear is really slow because SHM is via remote memory
-            self.qemu.wm(0x4074EDE2, 4, 0)
+            addr = self.symbol_table.lookup("QUIRK_S337AP_SHM_HACK").address
+            self.qemu.wm(addr, 4, 0) # 4 zero bytes is effectively a nop (andeq r0, r0, r0)
 
             disable_list += ["UDATA"]  # Rabm timer NULL
             disable_list += ["SHM"]  # takes a ton of CPU time

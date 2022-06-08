@@ -95,6 +95,18 @@ PATTERNS = {
         "align": 2,
         "required": True,
     },
+    # S337AP does a memclr of the SHM area on boot.
+    # As SHM is implemented via remote memory, this is slow - this quirck is a workaround
+    "QUIRK_S337AP_SHM_HACK": {
+        "pattern": [
+            "4ff09041 095889b1 6c4900f1 90424ff4 800306 a80097cd e906164f f09041?? ??????67 496748?? ??????03 e0"
+        ],
+        "offset_end": -6,
+        "soc_match": ["S337AP"],
+        # Thumb alignment
+        "align": 2,
+        "required": True,
+    },
     "SYM_LTERRC_INT_MOB_CMD_HO_FROM_IRAT_MSG_ID": {
         "lookup": handlers.find_lterrc_int_mob_cmd_ho_from_irat_msgid
     },
