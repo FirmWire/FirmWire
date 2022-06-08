@@ -71,7 +71,7 @@ PATTERNS = {
     # "LTE_RRC_EVENT_GRP_NAME" to find the creation function and explore from there.
     "SYM_EVENT_GROUP_LIST": {
         "pattern": [
-            "70 40 2d e9 00 40 a0 e1 ?? ?? 00 eb 00 50 a0 e1 20 00 9f e5 04 10 a0 e1 ?? 05 00 eb ?? 00 94 e5 00 00 50 e3 30 ff 2f 11 05 00 a0 e1 ?? ?? 00 eb 00 00 a0 e3 70 80 bd e8"
+            "70 40 2d e9 00 40 a0 e1 ?? ?? 00 eb 00 50 a0 e1 20 00 9f e5 04 10 a0 e1 ?? ?? 00 eb ?? 00 94 e5 00 00 50 e3 30 ff 2f 11 05 00 a0 e1 ?? ?? 00 eb 00 00 a0 e3 70 80 bd e8"
         ],
         "offset_end": 0x0,
         "post_lookup": handlers.dereference,
