@@ -541,7 +541,7 @@ def handle_UDI(self, cpustate, tb, hook):
     lr = cpustate.env_ptr.regs[14]
     log.error(
         "EXCEPTION: UNDEFINED INSTRUCTION (%s) - Faulting PC: 0x%08x",
-        self.get_current_task_name(self, cpustate),
+        self.get_current_task_name(cpustate),
         lr,
     )
     return False
