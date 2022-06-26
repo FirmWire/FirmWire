@@ -81,6 +81,7 @@ MODKIT_FUNCTION_SYMBOL(void, pal_MsgSendTo, int qid, void * item, unsigned int i
 MODKIT_FUNCTION_SYMBOL(void *, pal_MemAlloc, int type, uint32_t size, const char * szFile, unsigned int line)
 MODKIT_FUNCTION_SYMBOL(void, pal_Sleep, int time)
 MODKIT_FUNCTION_SYMBOL(void, pal_SmSetEvent, struct pal_event_group ** event, uint32_t code)
+MODKIT_FUNCTION_SYMBOL(void, pal_MemFree, void *ptr, const char * szFile, unsigned int line)
 MODKIT_DATA_SYMBOL(struct pal_queue *, SYM_QUEUE_LIST)
 MODKIT_DATA_SYMBOL(struct pal_event_group **, SYM_EVENT_GROUP_LIST)
 
