@@ -39,6 +39,9 @@ PATTERNS = {
         "pattern": "2d e9 f0 4f  0d 00  83 b0  99 46  92 46  80 46",
         "post_lookup": handlers.fixup_bios_symbol,
     },
+    "pal_MemFree": {
+        "pattern": "5e 4b 10 b5 9b 68 13 b1 bd e8 10 40 18 47",
+    },
     "pal_MsgSendTo": {
         "pattern": [
             "70 b5 ?+ 04 46 15 46 0e 46 ?? ?? 01 df ?* 88 60 08 46 ?+ ?? 48 ???? ???? 20 46 98 47",  # G973F
