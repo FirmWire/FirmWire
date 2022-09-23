@@ -39,6 +39,7 @@ struct glink_queue_buf {
 } __attribute__((packed));
 
 struct glink_set_event {
+  uint8_t eventFlags;
   char eventName[9];
 } __attribute__((packed));
 
@@ -226,7 +227,7 @@ int glink_process_cmd()
         return -1;
       }
 
-      pal_SmSetEvent(&evt, 4);
+      pal_SmSetEvent(&evt, msg->eventFlags);
       break;
     }
     case GLINK_ALLOC_BLOCK: {

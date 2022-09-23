@@ -231,12 +231,13 @@ class GLinkPeripheral(FirmWirePeripheral):
         header = self.glink_header(cmd_type, len(msg))
         return self.send_cmd(header + msg)
 
-    def set_event(self, event_name: Union[bytes, str]):
+    def set_event(self, event_name: Union[bytes, str], flags: int = 4):
         """
         Set/send an event
         """
         return self.send_cmd(
             self.glink_header(GLINK_CMD_TYPE.GLINK_SET_EVENT, FIXED_NAME_LEN)
+            + struct.pack("<B", flags)
             + self.name2fixedlen(event_name, FIXED_NAME_LEN)
         )
 
