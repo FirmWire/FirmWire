@@ -40,7 +40,7 @@ PATTERNS = {
         "post_lookup": handlers.fixup_bios_symbol,
     },
     "pal_MemFree": {
-        "pattern": "5e 4b 10 b5 9b 68 13 b1 bd e8 10 40 18 47",
+        "pattern": "?? 4b 10 b5 9b 68 13 b1 bd e8 10 40 18 47",
     },
     "pal_MsgSendTo": {
         "pattern": [
