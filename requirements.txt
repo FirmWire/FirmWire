@@ -18,7 +18,6 @@ pyelftools
 requests
 # MTK required
 filetype
-rocksdb
 # Below required for pypanda
 cffi
 protobuf

@@ -7,7 +7,7 @@ ENV IS_DOCKER="1"
 
 RUN apt-get update && apt-get upgrade -y && \
     apt-get -y install --no-install-suggests --no-install-recommends \
-    automake \
+    automake cmake \
     bison flex \
     build-essential \
     chrpath \
@@ -24,7 +24,7 @@ RUN apt-get update && apt-get upgrade -y && \
     protobuf-compiler protobuf-c-compiler python3-protobuf libprotoc-dev libprotobuf-dev libprotobuf-c-dev libjsoncpp-dev \
     gdb-multiarch python3-pip qemu-utils libcapstone-dev \
   && apt-get update \
-  && apt-get install -y gcc-9-mipsel-linux-gnu gcc-9-multilib \
+  && apt-get install -y gcc-9-mipsel-linux-gnu \
   && update-alternatives --install /usr/bin/mipsel-linux-gnu-gcc mipsel-linux-gnu-gcc /usr/bin/mipsel-linux-gnu-gcc-9 10 \
   && pip3 install https://foss.heptapod.net/pypy/cffi/-/archive/branch/default/cffi-branch-default.tar.gz
 # Ubuntu is unable to install the gcc-multilib metapackage with any cross compiler due to /usr/include/asm conflicts
@@ -101,6 +101,9 @@ RUN rm -rf panda \
   && python3 setup.py install
 
 COPY requirements.txt /firmwire/requirements.txt
+# Install a specific unicorn version known to build on aarch64
+# Unicorn is just needed as a dependency for avatar2
+RUN pip3 install unicorn==1.0.3
 RUN pip3 install -r /firmwire/requirements.txt
 
 WORKDIR /firmwire
