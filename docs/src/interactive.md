@@ -21,6 +21,8 @@ gef-remote --qemu-mode 127.0.0.1:PORT
 Once connected, you should be able to set breakpoints, inspect and modify memory, as well as steering execution just as usual.
 Under the hood, FirmWire spawns a gdb server provided by the corresponding [avatar2 plugin](https://github.com/avatartwo/avatar2/blob/main/avatar2/plugins/gdbserver.py). This allows to transparently access both the memory provided by avatar-backed memory ranges (as in the case of  python peripherals), and emulated memory provided by PANDA.
 
+> **NOTE:** For ARM targets (Shannon), due to mixed ARM / Thumb2, you _may_ need to set breakpoints at your target addresses +/- 1 byte. This is a limitation of QEMU's ARM gdbstub, causing breakpoints to be missed depending on the code's ISA mode.
+
 What's more, via gdb's `monitor` command you have directly access to the Python context of avatar2 gdb server, and allows you to execute simple Python statements. You even can access the global avatar object from gdb by executing:
 ```
 monitor self.avatar
