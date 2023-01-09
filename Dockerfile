@@ -41,7 +41,7 @@ RUN rm -rf panda \
   && rm -rf build \
   && mkdir build \
   && cd build \
-  && ../configure --disable-werror --target-list=arm-softmmu,mipsel-softmmu \
+  && ../configure --disable-werror --target-list=arm-softmmu,mipsel-softmmu,aarch64-softmmu \
     --cc=gcc-9 \
     --cxx=g++-9 \
     --disable-sdl \
