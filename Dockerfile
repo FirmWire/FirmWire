@@ -35,7 +35,7 @@ RUN apt-get update && apt-get upgrade -y && \
 # Install panda, and deps for Shannon Panda
 WORKDIR /firmwire_deps
 RUN rm -rf panda \
-  && git clone --depth=1 https://github.com/FirmWire/panda.git \
+  && git clone -b feat/aarch64 --depth=1 https://github.com/FirmWire/panda.git \
   && cd panda \
   && git checkout main \
   && rm -rf build \
