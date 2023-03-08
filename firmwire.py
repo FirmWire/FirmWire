@@ -179,6 +179,12 @@ def get_args():
         help="Replay a persistent-mode crash log written with --fuzz-crashlog-dir.",
     )
 
+    fuzzopts.add_argument(
+        "--keep-breakpoints-enabled",
+        action="store_true",
+        help="Always enable breakpoints by not shutting down the execution protocol",
+        )
+
     ### Loader args
 
     def fix_up_params(name, params):
@@ -388,7 +394,8 @@ def main() -> int:
         machine.print_task_list()
 
     log.info("Starting emulator %s", machine.instance_name)
-    machine.start(start_suspended=args.stop, console=args.console)
+    machine.start(start_suspended=args.stop, console=args.console, \
+        keep_exec=args.keep_breakpoints_enabled)
 
 
 if __name__ == "__main__":

@@ -157,7 +157,7 @@ class FirmWireEmu(ABC):
 
         return True
 
-    def start(self, start_suspended=False, console=False):
+    def start(self, start_suspended=False, console=False, keep_exec=False):
         """Start the emulator"""
         assert self.qemu is not None
 
@@ -177,7 +177,7 @@ class FirmWireEmu(ABC):
                     qemu.protocols.monitor.shutdown()
                     # MTKEmu requires breakpoints (and hence, execution) to get to fuzzing,
                     # so we only shutdown execution in other cases
-                    if not "MtkEMU" in self.instance_name:
+                    if not "MtkEMU" in self.instance_name and not keep_exec:
                         qemu.protocols.execution.shutdown()
                 else:
                     qemu.cont()
