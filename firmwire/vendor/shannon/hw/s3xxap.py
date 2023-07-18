@@ -25,7 +25,7 @@ class S3xxAPBoot(LoggingPeripheral):
         return super().hw_write(offset, size, value)
 
     def __init__(self, name, address, size, **kwargs):
-        super().__init__(name, address, size)
+        super().__init__(name, address, size, **kwargs)
 
         self.read_handler[0:size] = self.hw_read
         self.write_handler[0:size] = self.hw_write
