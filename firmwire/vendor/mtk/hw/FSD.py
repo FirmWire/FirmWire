@@ -1302,7 +1302,7 @@ class MTKFSD:
         #   assert failed (break): b'common/modem/mml1/mml1_rf/mml1_rf_error_check.c':211
         self.log.warning("Restore: %s stub!", path)
 
-        return FSError.NO_ERROR, []
+        return FSError.GENERAL_FAILURE, []
 
     def _op_CREATEDIR(self, args):
         dirname = self._convert_path(args[0])
