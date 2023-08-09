@@ -19,6 +19,7 @@
 MODKIT_FUNCTION_SYMBOL(char *, prbm_allocate, int, int)
 MODKIT_FUNCTION_SYMBOL(char *, prbm_release, int, int, int)
 MODKIT_FUNCTION_SYMBOL(char *, errc_lcom_get_emi_address, int, int)
+MODKIT_FUNCTION_SYMBOL(void *, get_int_ctrl_buffer, int, char *, int)
 
 MODKIT_FUNCTION_SYMBOL(void, errc_set_current_errc_sim_idx_cntx_ptr, int)
 
@@ -64,7 +65,8 @@ int fuzz_single_setup()
     // because it doesn't trigger aborts
     // and in persistent mode, OS state can be messed up
     // -> we just allocate a large buffer here
-    asn_pl = prbm_allocate(0x200, 1);
+    //asn_pl = prbm_allocate(0x200, 1);
+    asn_pl = get_int_ctrl_buffer(0x200, "", 1);
 
 #if 0
     // first param is sim idx, second is emi id
