@@ -36,7 +36,10 @@ PATTERNS = {
         "pattern": "70 b5 05 46 ???????? ?? 48 ?? 24",
     },
     "pal_MemAlloc": {
-        "pattern": "2d e9 f0 4f  0d 00  83 b0  99 46  92 46  80 46",
+        "pattern" : [
+            "2d e9 f0 4f  0d 00  83 b0  99 46  92 46  80 46",
+            "2d e9 ff 4f  4f f0  00 05  0e 00  83 b0  9a 46"
+            ],
         "post_lookup": handlers.fixup_bios_symbol,
     },
     "pal_MemFree": {
@@ -56,6 +59,7 @@ PATTERNS = {
     "log_printf": {
         "pattern": [
             "0fb4 2de9f047 ???? ??98 d0e90060 c0f34815",
+            "0fb4 2de9f0?? ???? ??98 d0e900?? ??f3????",
             "0f b4 10 b5 03 a9 02 98 ff f7 9a ff 10 bc 5d f8 14 fb",
         ],
         "required": True,
