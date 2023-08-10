@@ -238,26 +238,15 @@ class S335AP(ShannonSOC):
         super().__init__(date)
 
         dsp_load_addr = dsp_base_search(main_section)
-        if date < 20180601:
-            self.peripherals += [
-                SOCPeripheral(
-                    DSPPeripheral,
-                    dsp_load_addr,
-                    0x100,
-                    name="DSPPeripheral",
-                    sync=[118, 252],
-                )
-            ]
-        else:
-            self.peripherals += [
-                SOCPeripheral(
-                    DSPPeripheral,
-                    dsp_load_addr,
-                    0x100,
-                    name="DSPPeripheral",
-                    sync=[125, 255],
-                )
-            ]
+        self.peripherals += [
+            SOCPeripheral(
+                DSPPeripheral,
+                dsp_load_addr,
+                0x100,
+                name="DSPPeripheral",
+                sync=[125, 255],
+            )
+        ]
 
 
 register_soc("shannon", S335AP)

@@ -335,7 +335,15 @@ def get_dsp_sync0(self, sym, data, offset):
 def get_dsp_sync1(self, sym, data, offset):
     main_toc = self.modem_file.get_section("MAIN")
 
-    sync_word = main_toc.data[sym.address - main_toc.load_address] * 2
+
+    # This is a horrible hack, however, DSP SYNC1 is provided in two different
+    # instruction encodings. If the sync word is smaller than 255, it uses the resolved value directly,
+    # Otherwise it's multiplied by two.
+    # We deal with this by assuming that resolved words lower than 250 are meant to be multiplied by two,
+    # Otherwise we use it directly as sync word
+    resolved_byte = main_toc.data[sym.address - main_toc.load_address]
+    sync_word = resolved_byte * 2 if resolved_byte < 250 else resolved_byte
+
     self.symbol_table.remove(sym.name)
     self.symbol_table.add(sym.name, sync_word)
     log.info(f"Retrieved sync word 1: {sync_word}")
