@@ -173,11 +173,6 @@ class ShannonMachine(FirmWireEmu, ShannonOSI):
 
         self.set_breakpoint(addr, dump_fn, temporary=once)
 
-    def run_for(self, t):
-        self.qemu.cont()
-        sleep(t)
-        self.qemu.stop()
-
     # Override breakpointing to account for Thumb functions
     def set_breakpoint(self, address, handler, temporary=False, **kwargs):
         if address & 1:

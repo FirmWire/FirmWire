@@ -707,3 +707,11 @@ class FirmWireEmu(ABC):
         self.avatar.shutdown()
 
         return True
+
+    def run_for(self, t):
+        """
+        Run the target for the specified amount of seconds before stopping again
+        """
+        self.qemu.cont()
+        time.sleep(t)
+        self.qemu.stop()
