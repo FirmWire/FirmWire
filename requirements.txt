@@ -10,6 +10,10 @@ jupyter-client==7.1.2
 jupyter-console==6.4.3
 jupyter-core==4.9.2
 
+# FirmWire tests
+pytest
+pytest-forked
+
 # Decompressing Shannon modem.bin containers
 lz4
 # Parsing injectable modules
