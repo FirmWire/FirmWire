@@ -9,6 +9,7 @@ import logging
 
 import firmwire
 from firmwire.util.param import ParamValidator
+from firmwire.emulator.init import MachineInitParams
 from _version import __version__
 
 log = logging.getLogger("firmwire")
@@ -133,6 +134,7 @@ def get_args():
     parser.add_argument(
         "-t",
         "--module",
+        **MachineInitParams.param_arg_spec("injected-task"),
         dest="injected_task",
         help="Module to inject into baseband memory",
     )
@@ -142,41 +144,41 @@ def get_args():
     )
     parser.add_argument(
         "--consecutive-ports",
-        type=int,
+        **MachineInitParams.param_arg_spec("--consecutive-ports"),
         help=f"Choose consecutive ports for the any listening sockets (e.g. QEMU's GDB & QMP), starting with the port provided.",
     )
 
     fuzzopts = parser.add_argument_group("fuzzing options")
 
     fuzzopts.add_argument(
-        "--fuzz", help="Inject and invoke the passed AFL fuzz task module (headless)."
+        "--fuzz",
+        **MachineInitParams.param_arg_spec("--fuzz"),
+        help="Inject and invoke the passed AFL fuzz task module (headless)."
     )
     fuzzopts.add_argument(
         "--fuzz-triage",
+        **MachineInitParams.param_arg_spec("--fuzz-triage"),
         help="Invoke the fuzzer, but without an AFL front end. Enables debug hooks and saves code coverage as a CSV in the workspace (${workspace}/coverage/coverage_${fuzz_input}.csv).",
     )
     fuzzopts.add_argument(
         "--fuzz-input",
-        type=str,
-        default=None,
+        **MachineInitParams.param_arg_spec("--fuzz-input"),
         help="Path the fuzzer test case (use @@ with AFL) or just the path to a single test file.",
     )
     fuzzopts.add_argument(
         "--fuzz-persistent",
-        type=int,
+        **MachineInitParams.param_arg_spec("--fuzz-persistent"),
         help="Enable persistent fuzzing with a loop count as the argument.",
     )
     fuzzopts.add_argument(
         "--fuzz-crashlog-dir",
-        type=str,
-        default=None,
+        **MachineInitParams.param_arg_spec("--fuzz-crashlog-dir"),
         help='Save input-file sequences that led to a crash during persistent mode fuzzing, effectively enabling "stateful" fuzzing. The log file starts with a MD5 hash of the last input (the one causing the crash). Binary format: ([u32:length][u8[]:testbytes])+',
     )
 
     fuzzopts.add_argument(
         "--fuzz-crashlog-replay",
-        type=str,
-        default=None,
+        **MachineInitParams.param_arg_spec("--fuzz-crashlog-dir"),
         help="Replay a persistent-mode crash log written with --fuzz-crashlog-dir.",
     )
 
@@ -233,6 +235,7 @@ def get_args():
     devopts.add_argument(
         "--raw-asm-logging",
         action="store_true",
+        **MachineInitParams.param_arg_spec("--raw-asm-logging"),
         help="Print assembly basic blocks as QEMU executes them. Useful for spotting infinite loops.",
     )
     devopts.add_argument(
@@ -249,34 +252,22 @@ def get_args():
     ### Parse
     args = parser.parse_args()
 
+    params = MachineInitParams()
+
+    for k, v in vars(args).items():
+        if params.has(k) and v is not None:
+            params.set(k, v)
+
+    params.validate(arg_parser=parser)
+
     for name, validator in loader_specific_args.items():
         loader_specific_args[name] = validator.extract_relevant_params(args)
 
-    if sum([bool(a) for a in [args.fuzz, args.fuzz_triage, args.injected_task]]) > 1:
-        parser.error("--fuzz, --fuzz-triage, and --module are mutually exclusive")
-
-    if (args.fuzz or args.fuzz_triage) and not (
-        args.fuzz_input or args.fuzz_crashlog_replay
-    ):
-        parser.error(
-            "--fuzz and --fuzz-triage flags need --fuzz-input or --fuzz-crashlog-replay as well"
-        )
-    if args.fuzz_persistent and not (args.fuzz or args.fuzz_triage):
-        parser.error("--fuzz-persistent requires --fuzz")
-    if args.fuzz_persistent and args.fuzz_persistent < 1:
-        parser.error("--fuzz-persistent loops count must be one or greater")
-    if args.fuzz_crashlog_dir and args.fuzz_crashlog_replay:
-        parser.error(
-            "--fuzz-crashlog-dir and --fuzz-crashlog-replay are mutually exclusive"
-        )
-    if args.fuzz_crashlog_replay and args.fuzz_input:
-        parser.error("Cannot replay a crash log and a single file at the same time.")
-
-    return args, loader_specific_args
+    return args, loader_specific_args, params
 
 
 def main() -> int:
-    args, loader_specific_args = get_args()
+    args, loader_specific_args, init_params = get_args()
 
     firmwire.util.logging.setup_logging(
         debug=args.debug,
@@ -326,7 +317,7 @@ def main() -> int:
 
     log.info("FirmWire initializing %s", type(machine).__name__)
 
-    if not machine.initialize(loader, args):
+    if not machine.initialize(loader, init_params):
         log.error("Machine failed to initialize")
         return 1
 
