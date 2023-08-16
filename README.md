@@ -14,14 +14,12 @@ FirmWire is a full-system baseband firmware analysis platform that supports Sams
 <img width="750" src="https://user-images.githubusercontent.com/3030665/158176187-97265e7b-bf7c-41d8-a5b2-fbbadbfe25d6.gif" />
 </p>
 
-> **Experiments & Missing Parts?**
->> Upon a vendor's request, the current public release of FirmWire is a preview version omitting some of the functionality described in the paper.
-We will publish the full version and automated scripts to replicate our experiments during NDSS'22 (April 24th-28th).
 
 ## BibTeX
 <a href="https://hernan.de/research/papers/firmwire-ndss22-hernandez.pdf"> <img title="" src="https://user-images.githubusercontent.com/3030665/149030164-2adf65b2-114a-4f07-82ea-67cf1f65edef.png" alt="FirmWire thumbnail" align="right" width="200"></a>
 FirmWire is the result of a multi-year, cross university research effort.
 See the [paper](https://hernan.de/research/papers/firmwire-ndss22-hernandez.pdf) for more details.
+For reproducible research and experimental data from our paper, see the [NDSS'22 repository](https://github.com/FirmWire/ndss22_experiments).
 
 If you are using FirmWire in an academic paper please use this to cite it:
 
