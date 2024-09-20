@@ -461,7 +461,7 @@ r12: %08x     cpsr: %08x""" % (
             self.hook_debug()
             avatar.load_plugin("disassembler")
 
-        if args.fuzz_triage:
+        if args.fuzz_triage and args.fuzz_input:
             coverage_dir = self.workspace.path("/coverage")
             coverage_dir.mkdir()
 
