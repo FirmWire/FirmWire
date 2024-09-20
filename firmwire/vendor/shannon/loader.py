@@ -439,8 +439,9 @@ class ShannonLoader(firmwire.loader.Loader):
         )
 
         # Special handling for Moto One images; these don't use a classic date, but ID numbers
-        if soc_guess == "S337AP":
+        if soc_guess == "S337AP" and b'MOTOONE' in found.group():
             soc_date = int(found.group().split(b"SGCS_QB")[-1])
+
 
         self.modem_soc = get_soc(self.NAME, soc_guess)
 

@@ -553,25 +553,9 @@ r12: %08x     cpsr: %08x""" % (
         return True
 
     def disable_task_by_id(self, idx):
-        sym = self.symbol_table.lookup("pal_Sleep")
-
-        if not sym:
-            log.error("Unable to disable task without pal_Sleep symbol")
-            return False
-
-        if self.nop_task_address is None:
-            self.nop_task_address = self.playground.begin + 0x4000
-            log.info("Creating NOP task at 0x%08x", self.nop_task_address)
-
-            pal_sleep = sym.address | 1
-            nop_bytes = self.qemu.assemble(
-                NOP_TASK_SNIPPET.format(pal_sleep), addr=self.nop_task_address
-            )
-            self.qemu.write_memory(
-                self.nop_task_address, 1, nop_bytes, len(nop_bytes), raw=True
-            )
 
         task_arr = self.symbol_table.lookup("SYM_TASK_LIST").address
+        bxlr = self.symbol_table.lookup("BXLR").address
 
         task_struct_addr = task_arr + idx * self.task_layout.SIZE()
         task_struct_data = self.qemu.rm(
@@ -582,7 +566,7 @@ r12: %08x     cpsr: %08x""" % (
             task_struct_addr, self.task_layout, raw_bytes=task_struct_data
         )
 
-        nulltask.main_fn = self.nop_task_address | 0x1  # force thumb mode
+        nulltask.main_fn = bxlr | 0x1  # force thumb mode
         nulltask.pre_fn = 0  # zero disables this from being called
 
         self.qemu.wm(task_struct_addr, len(nulltask.data), nulltask.data, raw=True)
@@ -868,8 +852,17 @@ r12: %08x     cpsr: %08x""" % (
         elif self.modem_soc.name == "S337AP":
             # This is a hack to prevent a memclr of the SHM region
             # The clear is really slow because SHM is via remote memory
-            addr = self.symbol_table.lookup("QUIRK_S337AP_SHM_HACK").address
-            self.qemu.wm(addr, 4, 0) # 4 zero bytes is effectively a nop (andeq r0, r0, r0)
+            if self.symbol_table.lookup("QUIRK_S337AP_SHM_HACK"):
+                addr = self.symbol_table.lookup("QUIRK_S337AP_SHM_HACK").address
+                self.qemu.wm(addr, 4, 0) # 4 zero bytes is effectively a nop (andeq r0, r0, r0)
+
+            if self.symbol_table.lookup("quirk_boot_key_check_a51"):
+                self.set_breakpoint(
+                    self.symbol_table.lookup("quirk_boot_key_check_a51").address, set_key
+                )
+                # A51 images have issues with the packethandlers due to missing SBD, as above
+                disable_list += ["InitPacketHandler"]
+                disable_list += ["PacketHandler"]
 
             disable_list += ["UDATA"]  # Rabm timer NULL
             disable_list += ["SHM"]  # takes a ton of CPU time

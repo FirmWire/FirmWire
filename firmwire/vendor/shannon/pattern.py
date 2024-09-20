@@ -102,7 +102,7 @@ PATTERNS = {
         "align": 2,
         "required": True,
     },
-    # S337AP does a memclr of the SHM area on boot.
+    # S337AP for Moto One does a memclr of the SHM area on boot.
     # As SHM is implemented via remote memory, this is slow - this quirck is a workaround
     "QUIRK_S337AP_SHM_HACK": {
         "pattern": [
@@ -112,7 +112,17 @@ PATTERNS = {
         "soc_match": ["S337AP"],
         # Thumb alignment
         "align": 2,
-        "required": True,
+        "required": False,
+    },
+    # S337AP for A51 has a boot key, but S337AP for Moto does not, thus this workaround
+    # The better solution would probably to split this into two socs and handle the difference in the loader
+    "quirk_boot_key_check_a51": {
+        "pattern": [
+            "?? 49 00 22 ?? 48 ?? a3 ?? ?? ?? ?? 80 21 68 46 ?? ?? ?? ?? 10 22 20 a9 68 46 ?? ?? ?? ??"
+        ],
+        "offset_end": 0x0,
+        "soc_match": ["S337AP"],
+        "required": False,
     },
     "SYM_LTERRC_INT_MOB_CMD_HO_FROM_IRAT_MSG_ID": {
         "lookup": handlers.find_lterrc_int_mob_cmd_ho_from_irat_msgid
@@ -136,4 +146,9 @@ PATTERNS = {
         "post_lookup": handlers.get_dsp_sync1,
         "required": False,
     },
+    "BXLR": {
+        "pattern": "70 47",
+        "required": True,
+        "align": 2
+    }
 }
