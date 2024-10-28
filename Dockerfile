@@ -5,6 +5,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 ENV AFL_SKIP_CPUFREQ=1
 ENV IS_DOCKER="1"
 
+
 RUN apt-get update && apt-get upgrade -y && \
     apt-get -y install --no-install-suggests --no-install-recommends \
     automake \
@@ -13,24 +14,35 @@ RUN apt-get update && apt-get upgrade -y && \
     chrpath \
     git zip zsh openssh-client \
     clang clang-tools \
-    python3 python3-dev python3-setuptools \
     libglib2.0-dev gcc-arm-none-eabi \
     libtool libtool-bin \
     wget curl vim \
     apt-utils apt-transport-https ca-certificates gnupg dialog \
     libpixman-1-dev \
-    virtualenv python3-ipython \
-    python3 python3-pip libc++-dev libcurl4-openssl-dev libelf-dev libffi-dev libdwarf-dev libelf-dev libwiretap-dev wireshark-dev python3-pycparser \
-    protobuf-compiler protobuf-c-compiler python3-protobuf libprotoc-dev libprotobuf-dev libprotobuf-c-dev libjsoncpp-dev \
-    gdb-multiarch python3-pip qemu-utils libcapstone-dev \
+    libc++-dev libcurl4-openssl-dev libelf-dev libffi-dev libdwarf-dev libelf-dev libwiretap-dev wireshark-dev \
+    protobuf-compiler protobuf-c-compiler libprotoc-dev libprotobuf-dev libprotobuf-c-dev libjsoncpp-dev \
+    gdb-multiarch qemu-utils libcapstone-dev \
   && apt-get update \
   && apt-get install -y gcc-9-mipsel-linux-gnu gcc-9-multilib \
-  && update-alternatives --install /usr/bin/mipsel-linux-gnu-gcc mipsel-linux-gnu-gcc /usr/bin/mipsel-linux-gnu-gcc-9 10 \
-  && pip3 install https://foss.heptapod.net/pypy/cffi/-/archive/branch/default/cffi-branch-default.tar.gz
+  && update-alternatives --install /usr/bin/mipsel-linux-gnu-gcc mipsel-linux-gnu-gcc /usr/bin/mipsel-linux-gnu-gcc-9 10
 # Ubuntu is unable to install the gcc-multilib metapackage with any cross compiler due to /usr/include/asm conflicts
 # See: https://bugs.launchpad.net/ubuntu/+source/gcc-defaults/+bug/1300211
-# pypanda needs the latest cffi, because $reasons
 
+# install a newer version of python and get dependencies
+RUN apt install software-properties-common -y \
+  && add-apt-repository -y ppa:deadsnakes/ppa \
+  && apt-get update \
+  && apt install -y python3.10 python3.10-distutils python3.10-venv python3.10-dev
+
+# python3-ipython \
+#    python3 python3-pip python3-venv
+#    python3 python3-dev python3-setuptools \
+
+RUN python3.10 -m venv /opt/firmwire_venv && \
+    . /opt/firmwire_venv/bin/activate && \
+    pip3 install --upgrade pip && \
+    pip3 install cffi pycparser protobuf==3.20.3
+ENV PATH="/opt/firmwire_venv/bin:$PATH"
   
 # Install panda, and deps for Shannon Panda
 WORKDIR /firmwire_deps
@@ -96,7 +108,8 @@ RUN rm -rf panda \
     --disable-vhost-vsock \
     --disable-opengl \
     --disable-virglrenderer \
-  && make -j `nproc` \
+    ;
+RUN cd panda/build &&  make -j `nproc` \
   && cd /firmwire_deps/panda/panda/python/core/ \
   && python3 setup.py install
 
