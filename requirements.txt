@@ -27,4 +27,3 @@ rocksdb
 cffi
 protobuf
 colorama
-unicorn==2.1.0
