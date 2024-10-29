@@ -16,6 +16,7 @@ def setup():
     assert MTK_MODEM_FILE, SHANNON_MODEM_FILE
 
 def test_shannon_basic():
+    setup()
     workspace = firmwire.ScratchWorkspace()
     workspace.create()
 
@@ -34,6 +35,7 @@ def test_shannon_basic():
     machine.avatar.shutdown()
 
 def test_mtk_basic():
+    setup()
     workspace = firmwire.ScratchWorkspace()
     workspace.create()
     empty_nv = workspace.base_path() / "empty"
