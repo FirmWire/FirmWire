@@ -579,21 +579,27 @@ class MTKFSD:
             resp_buf += struct.pack("I", len(p))
             resp_buf += p + b"\x00" * (len(p) % 4)
 
-        # TODO: fragment outbound packets
-        assert len(resp_buf) <= MAX_FS_PKT_BYTE, "Unhandled output packet requirement"
+        bytes_written = 0
+        out_packets = []
 
-        ccci_header = struct.pack(
-            "5I",
-            data0 & ~CCCI_FRAGMENT,
-            len(resp_buf) + 0x14,
-            channel + 1,
-            reqBuf,
-            op | FS_API_RESP_ID,
-        )
+        while bytes_written < len(resp_buf):
+            must_fragment = (len(resp_buf) - bytes_written) > MAX_FS_PKT_BYTE
+            fragment_size = min(len(resp_buf) - bytes_written, MAX_FS_PKT_BYTE)
 
-        resp_buf = ccci_header + resp_buf
+            ccci_header = struct.pack(
+                "5I",
+                (data0 | CCCI_FRAGMENT) if must_fragment else (data0 & ~CCCI_FRAGMENT),
+                fragment_size + 0x14,
+                channel + 1,
+                reqBuf,
+                op | FS_API_RESP_ID,
+            )
 
-        return resp_buf
+            packet = ccci_header + resp_buf[bytes_written:(bytes_written+fragment_size)]
+            out_packets.append(packet)
+            bytes_written += fragment_size
+
+        return out_packets
 
     def _handle_op(self, op_int, args):
         ret = 0

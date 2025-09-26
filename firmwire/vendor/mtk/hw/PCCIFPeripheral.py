@@ -607,8 +607,9 @@ class PCCIF_Periph(PassthroughPeripheral):
         )
 
         # if no data was returned, don't write anything
-        if len(emu_resp):
-            ring.writePacket(emu_resp)
+        for fragment in emu_resp:
+            if len(fragment):
+                ring.writePacket(fragment)
 
     def _handleFSPacketCompare(self, ring, buff):
         # only this will write to the guest
