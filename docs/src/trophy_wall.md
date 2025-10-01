@@ -28,7 +28,7 @@ So far, FirmWire was involved in finding the following vulnerabilities:
 
 ## Blog posts
 
-So far, we are not aware of any blog posts about FirmWire, but this may change in the future. ;)
+- https://fuzzinglabs.com/breaking-down-the-baseband-shannon-in-a-nutshell/
 
 ## Adding your Vulnerability, Talk, or Blogpost to this Trophy Wall
 
