@@ -157,6 +157,10 @@ class MTKLoader(firmwire.loader.Loader):
         else:
             log.info("Loaded database with %d trace entries", len(parsed_lted["trace"]))
             self.trace_entries = parsed_lted["trace"]
+            msg_enum_lists = [enums for (name, enums) in parsed_lted["enum"].items() if name.startswith("__cgen_msg_type_id")]
+            msg_enums = [entries for (metadata, entries) in msg_enum_lists]
+            self.msg_ids = { v: k for y in msg_enums for (k, v) in y.items() } # Maps message names to their IDs
+            self.msg_names = { v: k for (k, v) in self.msg_ids.items() } # Maps the message IDs to their names
 
         # Check to see if NV data is available
         nv_data_path = self.loader_args["nv_data"]
