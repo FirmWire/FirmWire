@@ -27,6 +27,7 @@ CFLAGS=-march=interaptiv \
        -std=gnu99 \
        -fpie \
        -I $(CURDIR) \
+	   -I $(CURDIR)/../common \
        -Wall \
        -Wextra \
        -nostdlib \
@@ -39,6 +40,10 @@ CFLAGS=-march=interaptiv \
        -Wno-unused-parameter \
 	-Wl,--build-id=none \
 	   -Wl,--require-defined=TASK_NAME
+
+ifdef ASSUME_CONNECTED_STATE
+CFLAGS += -DASSUME_CONNECTED_STATE
+endif
 
 ASFLAGS=
 DEPFLAGS=-M $(CFLAGS)

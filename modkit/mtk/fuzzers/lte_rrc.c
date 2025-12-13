@@ -3,9 +3,9 @@
 #include <afl.h>
 #include "common.h"
 #include "mtk_api.h"
+#include "ota_data.h"
 
 //#define DEBUG_PRINTS
-
 #define PARA_STRUCT_SIZE 0xc
 #define PARA_STRUCT_PLSIZE (PARA_STRUCT_SIZE-4)
 
@@ -55,7 +55,6 @@ char *asn_pl;
 
 int fuzz_single_setup()
 {
-    const char nops[4] = "\x00\x65\x00\x65";
     const char jrcnop[4] = "\xa0\xe8\x00\x65";
 
     // output version for debugging
@@ -90,10 +89,15 @@ int fuzz_single_setup()
     memcpy(errc_asn1_mem_free, jrcnop, 4);
 
     // 3 is likely ERRC_CONNECTED or LTE_RRC_STATE_CONNECTED?
+#ifdef ASSUME_CONNECTED_STATE
+    #ifdef DEBUG_PRINTS
+        dhl_print_string(2, 0, 0, "[+] Patching state");
+    #endif
     errc_set_current_errc_sim_idx_cntx_ptr(0);
     errc_spv_write_errc_state(3);
     errc_set_current_errc_sim_idx_cntx_ptr(1);
     errc_spv_write_errc_state(3);
+#endif
 
     return 1;
 }
@@ -135,18 +139,6 @@ void fuzz_single()
     }
     input_size = size - 1;
 
-#if 0
-    char *asn_pl;
-    unsigned int prbm_alloc_size = 0;
-    if (buf[0] == 0x4a)
-        prbm_alloc_size = input_size + 4;
-    else if (buf[0] != 0x47)
-        prbm_alloc_size = input_size;
-
-    if (prbm_alloc_size != 0)
-        asn_pl = prbm_allocate(input_size, 1);
-    //char *asn_pl = (void *)0x50000000;
-#endif
     memset(asn_pl, 0, 0x200);
 
     unsigned int my_num;
@@ -154,13 +146,16 @@ void fuzz_single()
 #ifdef DEBUG_PRINTS
     dhl_print_string(2, 0, 0, "[+] calling alloc_local_para\n");
 #endif
-    switch (buf[0]) {
-    case 0x53: // MCCH
+
+    DlControlChannelsLte_t input_type = buf[0] % DlControlChannelsLteCount;
+
+    switch (input_type) {
+    case MCCH: // MCCH
         _local_para_ptr = alloc_local_para(0x8 + 0x8);
         memcpy(((char *)_local_para_ptr) + 0x8, &asn_pl, 4);
         memcpy(((char *)_local_para_ptr) + 0xc, &input_size, 4);
         break;
-    case 0x4a: // DL_DCCH
+    case DCCH: // DL_DCCH
         _local_para_ptr = alloc_local_para(0x8 + 0x10);
         memcpy(((char *)_local_para_ptr) + 0x10, &asn_pl, 4);
         my_num = input_size + 4; // last 4 bytes are something else, there's a memcmp /after/ asn1 parsing
@@ -168,12 +163,12 @@ void fuzz_single()
         my_num = 2; // 2 seems to be active state?
         memcpy(((char *)_local_para_ptr) + 0x8, &my_num, 4);
         break;
-    case 0x49: // DL_CCCH
+    case CCCH: // DL_CCCH
         _local_para_ptr = alloc_local_para(0x8 + 0x4);
         memcpy(((char *)_local_para_ptr) + 0x4, &asn_pl, 4); // FIXME: this can't be right...???
         memcpy(((char *)_local_para_ptr) + 0x8, &input_size, 4);
         break;
-    case 0x47: // BCCH_DL_SCH
+    case BCCH_DL_SCH: // BCCH_DL_SCH
         _local_para_ptr = alloc_local_para(0x8 + 0x10);
 
         // get through checks in errc_lsys_main
@@ -211,8 +206,8 @@ void fuzz_single()
 #endif
     startWork(0, 0xffffffff); // memory range to collect coverage
 
-    switch (buf[0]) {
-    case 0x53:
+    switch (input_type) {
+    case MCCH:
 //#define MCCH_FOR_A10s
 #ifdef MCCH_FOR_A10s
         // early builds:
@@ -224,13 +219,13 @@ void fuzz_single()
         msg_send6(TASK_ID_IDLE, TASK_ID_ERRC, 0, MSG_ID_MCCH, _local_para_ptr, _peer_buff_ptr);
 #endif
         break;
-    case 0x4a:
+    case DCCH:
         msg_send6(TASK_ID_IDLE, TASK_ID_ERRC, 0, MSG_ID_DCCH, _local_para_ptr, _peer_buff_ptr);
         break;
-    case 0x49:
+    case CCCH:
         msg_send6(TASK_ID_IDLE, TASK_ID_ERRC, 0, MSG_ID_CCCH, _local_para_ptr, _peer_buff_ptr);
         break;
-    case 0x47:
+    case BCCH_DL_SCH:
         // setting the source module to 0x4b avoids double-free in destroy_int_ilm, let's not ask too many questions
         msg_send6(0x4b, TASK_ID_ERRC, 0, MSG_ID_BCCH, _local_para_ptr, _peer_buff_ptr);
         break;
