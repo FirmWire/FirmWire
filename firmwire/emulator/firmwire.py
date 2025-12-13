@@ -47,6 +47,7 @@ class FirmWireEmu(ABC):
 
         self.signal_count = 0
         self.start_time = None
+        self._gsmtap_ip = None
 
     def set_breakpoint(self, address, handler, temporary=False, continue_after=False):
         """
@@ -715,3 +716,9 @@ class FirmWireEmu(ABC):
         self.qemu.cont()
         time.sleep(t)
         self.qemu.stop()
+
+    def set_gsmtap_ip(self, ip):
+        self._gsmtap_ip = ip
+
+    def get_gsmtap_ip(self):
+        return self._gsmtap_ip
