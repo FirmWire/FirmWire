@@ -19,6 +19,7 @@ from firmwire.vendor.mtk.hooks import (
     prompt_trace_hook,
     sys_trace_hook,
     NU_Set_Events_hook,
+    msg_send_hook
 )
 from firmwire.vendor.mtk.mtk_task import MtkTask, TASK_STRUCT_SIZE
 
@@ -586,6 +587,8 @@ class MT6878Machine(FirmWireEmu):
                 symbols["TCC_Task_Ready_To_Scheduled_Return"],
                 TCC_Task_Ready_To_Scheduled_Return,
             )
+            self.add_panda_hook(symbols["msg_send"], msg_send_hook)
+            self.add_panda_hook(symbols["msg_send_adt"], msg_send_hook)
 
             """
             def buffer_print_hook(self, env, tb, hook):

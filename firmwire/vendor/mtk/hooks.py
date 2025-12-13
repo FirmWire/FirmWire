@@ -3,6 +3,13 @@
 import struct
 import logging
 
+from firmwire.util.gsmtap import (
+    gsmtap_type,
+    gsmtap_lte_rrc_types,
+    send_gsmtap_packet,
+    create_gsmtap_header,
+)
+
 log = logging.getLogger(__name__)
 
 
@@ -188,3 +195,88 @@ def TCC_Task_Ready_To_Scheduled_Return(self, env, tb, hook):
     task = self.qemu.pypanda.arch.get_reg(env, "s1")
     if task != 0:
         self._current_task_name = self.read_phy_string(task + 0x10).decode()
+
+def msg_send_hook(self, env, tb, param3):
+    ra = self.qemu.pypanda.arch.get_reg(env, "ra")
+    struct_addr = self.qemu.pypanda.arch.get_reg(env, "a0")
+    src_id = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(struct_addr, 2), "little"
+    )
+    dest_id = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(struct_addr + 2, 2), "little"
+    )
+    msg_id = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(struct_addr + 6, 2), "little"
+    )
+    self.guest_logger.log_emit(
+        "msg_send: Sender %04X -> Receiver %04X ID: %s (%04X)",
+        src_id,
+        dest_id,
+        self.loader.msg_names.get(msg_id, "?"),
+        msg_id,
+        task_name=self._current_task_name,
+        address=ra,
+    )
+    if msg_id == self.loader.msg_ids["MSG_ID_ERRC_EPDCP_DCCH_DATA_REQ"]:
+        gsmtap_uplink_errc_dcch_data(self, env, struct_addr)
+    elif msg_id == self.loader.msg_ids["MSG_ID_ERRC_EPDCP_DCCH_DATA_IND"]:
+        gsmtap_downlink_errc_dcch_data(self, env, struct_addr)
+
+
+def gsmtap_uplink_errc_dcch_data(self, cpu, msg_struct_addr):
+    """
+        Parser for MSG_ID_RATDM_EPDCP_DATA_REQ
+    """
+    expected_msg_id = self.loader.msg_ids["MSG_ID_ERRC_EPDCP_DCCH_DATA_REQ"]
+
+    msg_id = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(msg_struct_addr + 6, 2), "little"
+    )
+    assert (
+        msg_id == expected_msg_id
+    ), f"Tried to extract a data buffer from wong ilm msg type (is: ${msg_id}, expected: MSG_ID_ERRC_EPDCP_DCCH_DATA_REQ (${expected_msg_id}))"
+    log.info(f"Forwarding DCCH-UL packet via GSMTAP")
+    local_para_ptr = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(msg_struct_addr + 8, 4), "little"
+    )
+    data_ptr = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(local_para_ptr + 12, 4), "little"
+    )
+    data_len = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(local_para_ptr + 16, 4), "little"
+    )
+    gsmtap_hdr = create_gsmtap_header(
+        payload_type=gsmtap_type.LTE_RRC, sub_type=gsmtap_lte_rrc_types.UL_DCCH
+    )
+    send_gsmtap_packet(
+        self, gsmtap_hdr, self.qemu.pypanda.physical_memory_read(data_ptr, data_len)
+    )
+
+
+def gsmtap_downlink_errc_dcch_data(self, cpu, msg_struct_addr):
+    """
+        Parser for MSG_ID_ERRC_EPDCP_DCCH_DATA_IND
+    """
+    expected_msg_id = self.loader.msg_ids["MSG_ID_ERRC_EPDCP_DCCH_DATA_IND"]
+    msg_id = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(msg_struct_addr + 6, 2), "little"
+    )
+    assert (
+        msg_id == expected_msg_id
+    ), f"Tried to extract a data buffer from wong ilm msg type (is: ${msg_id}, expected: MSG_ID_ERRC_EPDCP_DCCH_DATA_IND (${expected_msg_id}))"
+    log.info(f"Forwarding DCCH-DL packet via GSMTAP")
+    local_para_ptr = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(msg_struct_addr + 8, 4), "little"
+    )
+    data_ptr = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(local_para_ptr + 16, 4), "little"
+    )
+    data_len = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(local_para_ptr + 20, 4), "little"
+    )
+    gsmtap_hdr = create_gsmtap_header(
+        payload_type=gsmtap_type.LTE_RRC, sub_type=gsmtap_lte_rrc_types.DL_DCCH
+    )
+    send_gsmtap_packet(
+        self, gsmtap_hdr, self.qemu.pypanda.physical_memory_read(data_ptr, data_len)
+    )

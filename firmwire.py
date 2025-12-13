@@ -73,6 +73,10 @@ def get_args():
         help=f"Choose consecutive ports for the any listening sockets (e.g. QEMU's GDB & QMP), starting with the port provided.",
     )
 
+    parser.add_argument(
+        "--gsmtap", type=str, help="Stream packets from inside the baseband to this IP on port 4729 (gsmtap)"
+    )
+
     fuzzopts = parser.add_argument_group("fuzzing options")
 
     fuzzopts.add_argument(
@@ -288,6 +292,9 @@ def main() -> int:
 
     if args.gdb_server:
         machine.spawn_gdb_server(args.gdb_server)
+
+    if args.gsmtap:
+        machine.set_gsmtap_ip(args.gsmtap)
 
     if loader.NAME == "shannon":
         # With shannon we can inject tasks overwriting the old one, even after snapshot restores for quick dev
