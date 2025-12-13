@@ -6,6 +6,7 @@
 #include <modkit.h>
 //#include <hello_world.h>
 #include "afl.h"
+#include "common.h"
 
 MODKIT_FUNCTION_SYMBOL(void, dhl_print_string, int, int, int, char *)
 MODKIT_FUNCTION_SYMBOL(int, kal_get_task_by_moduleID, int)
