@@ -29,16 +29,27 @@ RUN apt-get update && apt-get upgrade -y && \
 # See: https://bugs.launchpad.net/ubuntu/+source/gcc-defaults/+bug/1300211
 
 # install a newer version of python and get dependencies
-RUN apt install software-properties-common -y \
-  && add-apt-repository -y ppa:deadsnakes/ppa \
-  && apt-get update \
-  && apt install -y python3.10 python3.10-distutils python3.10-venv python3.10-dev
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates curl \
+    build-essential pkg-config \
+    libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev \
+    libffi-dev liblzma-dev tk-dev uuid-dev \
+  && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://www.python.org/ftp/python/3.10.13/Python-3.10.13.tgz -o /tmp/Python-3.10.13.tgz \
+  && tar -xzf /tmp/Python-3.10.13.tgz -C /tmp \
+  && cd /tmp/Python-3.10.13 \
+  && ./configure --enable-optimizations --with-ensurepip=install \
+  && make -j"$(nproc)" \
+  && make altinstall \
+  && cd / \
+  && rm -rf /tmp/Python-3.10.13 /tmp/Python-3.10.13.tgz
 
 # python3-ipython \
 #    python3 python3-pip python3-venv
 #    python3 python3-dev python3-setuptools \
 
-RUN python3.10 -m venv /opt/firmwire_venv && \
+RUN /usr/local/bin/python3.10 -m venv /opt/firmwire_venv && \
     . /opt/firmwire_venv/bin/activate && \
     pip3 install --upgrade pip && \
     pip3 install cffi pycparser protobuf==3.20.3
