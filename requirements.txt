@@ -23,6 +23,8 @@ requests
 # MTK required
 filetype
 # Below required for pypanda
-cffi
+cffi==1.15.1
 protobuf
 colorama
+
+sortedcontainers==2.4.0

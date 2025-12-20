@@ -5,9 +5,14 @@ import struct
 from .queue import QUEUE_STRUCT_SIZE, QUEUE_NAME_PTR_OFFSET
 from .task import Task
 from firmwire.util.panda import read_cstring_panda
+from firmwire.vendor.shannon.lte.soc import CORTEX_R_SOC
+from firmwire.vendor.shannon.nr.soc import CORTEX_A_SOC
 
 
 class ShannonOSI:
+    def physical_memory_write(self, ptr: int, buf: bytes) -> bool:
+        return self.panda.physical_memory_write(ptr, buf)
+
     def get_task_name_by_id(self, task_id):
         task_arr = self.symbol_table.lookup("SYM_TASK_LIST").address
 
@@ -31,17 +36,29 @@ class ShannonOSI:
         return struct.unpack("I", self.panda.physical_memory_read(sym.address, 4))[0]
 
     def get_current_task_name(self, cpustate):
-        tid = self.get_current_task_id()
+        if self.modem_soc.name in CORTEX_A_SOC:
+            sym = self.symbol_table.lookup("SYM_CUR_TASK_PTR")
+            if sym is None:
+                return "ERROR_MISSING_SYM"
 
-        if tid is None:
-            return "ERROR_MISSING_SYM"
+            p_task_struct = struct.unpack("I", self.panda.physical_memory_read(sym.address, 4))[0]
+            if p_task_struct == 0 or p_task_struct == 0x50505050:
+                return "NO_TASK"
+            return read_cstring_panda(self.panda, p_task_struct + 0x24, max_length=9)
+        elif self.modem_soc.name in CORTEX_R_SOC:
+            tid = self.get_current_task_id()
 
-        name = self.get_sch_task_name_by_id(tid)
+            if tid is None:
+                return "ERROR_MISSING_SYM"
 
-        if name == "ERR_NO_TASK":
-            return "NO_TASK"
+            name = self.get_sch_task_name_by_id(tid)
+
+            if name == "ERR_NO_TASK":
+                return "NO_TASK"
+            else:
+                return name
         else:
-            return name
+            return "ERR_UNSUPPORTED_SOC"
 
     def get_sch_task_name_by_id(self, task_id):
         sched_task_table = self.symbol_table.lookup("SYM_SCHEDULABLE_TASK_LIST")

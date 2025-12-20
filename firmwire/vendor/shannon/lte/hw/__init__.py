@@ -1,5 +1,6 @@
 ## Copyright (c) 2022, Team FirmWire
 ## SPDX-License-Identifier: BSD-3-Clause
+
 from firmwire.hw.peripheral import *
 
 from .uart import UARTPeripheral, MotoUARTPeripheral

@@ -1,23 +1,10 @@
 ## Copyright (c) 2022, Team FirmWire
 ## SPDX-License-Identifier: BSD-3-Clause
 from ..hw import *
-from firmwire.hw.soc import FirmWireSOC, SOCPeripheral, register_soc
+from firmwire.hw.soc import SOCPeripheral, register_soc
 from firmwire.util.BinaryPattern import BinaryPattern
-
-
-class ShannonSOC(FirmWireSOC):
-    # Start in BOOT (can be overwritten)
-    ENTRY_ADDRESS = 0x0
-
-    # Whether the OSI for the TaskStruct should use the Moto or Samsung version
-
-    name = "Unknown"
-
-    def __init__(self, date, main_section=None):
-        self.date = date
-
-    def __repr__(self):
-        return "<ShannonSOC %s - %d>" % (self.name, self.date)
+from firmwire.vendor.shannon.common.hw import GicModel
+from firmwire.vendor.shannon.common.soc import ShannonSOC
 
 
 def dsp_base_search(main_section):
@@ -45,10 +32,16 @@ class S5000AP(ShannonSOC):
     CHIP_ID = 0x50000000
     SIPC_BASE = 0x8F920000
     SHM_BASE = 0x4B200000
+    SHM_PERIPHERAL = SHMPeripheral
     SOC_BASE = 0x82000000
     SOC_CLK_BASE = 0x83000000
+    SOC_PERIPHERAL = ShannonSOCPeripheral
     CLK_PERIPHERAL = S5000APClkPeripheral
+    IPC_PERIPHERAL = SIPCPeripheral
     TIMER_BASE = SOC_BASE + 0x8000
+    NUM_TIMERS = 6
+    iTINT0 = 34
+    GIC_MODEL = GicModel.A9_MPCORE
 
     name = "S5000AP"
 
@@ -76,10 +69,16 @@ class S360AP(ShannonSOC):
     CHIP_ID = 0x03600000
     SIPC_BASE = 0x8F170000
     SHM_BASE = 0x48000000
+    SHM_PERIPHERAL = SHMPeripheral
     SOC_BASE = 0x82000000
+    SOC_PERIPHERAL = ShannonSOCPeripheral
     SOC_CLK_BASE = 0x83000000
     CLK_PERIPHERAL = S360APClkPeripheral
+    IPC_PERIPHERAL = SIPCPeripheral
     TIMER_BASE = SOC_BASE + 0x8000
+    NUM_TIMERS = 6
+    iTINT0 = 34
+    GIC_MODEL = GicModel.A9_MPCORE
 
     name = "S360AP"
 
@@ -128,10 +127,16 @@ class S355AP(ShannonSOC):
     CHIP_ID = 0x03550000
     SIPC_BASE = 0x95B40000
     SHM_BASE = 0x48000000
+    SHM_PERIPHERAL = SHMPeripheral
     SOC_BASE = 0x83000000
+    SOC_PERIPHERAL = ShannonSOCPeripheral
     SOC_CLK_BASE = 0x83002000
     CLK_PERIPHERAL = S355APClkPeripheral
+    IPC_PERIPHERAL = SIPCPeripheral
     TIMER_BASE = SOC_BASE + 0xC000
+    NUM_TIMERS = 6
+    iTINT0 = 34
+    GIC_MODEL = GicModel.A9_MPCORE
 
     name = "S355AP"
 
@@ -179,10 +184,16 @@ class S337AP(ShannonSOC):
     CHIP_ID = 0x03370000
     SIPC_BASE = 0x8F920000
     SHM_BASE = 0x48000000
+    SHM_PERIPHERAL = SHMPeripheral
     SOC_BASE = 0x82000000
+    SOC_PERIPHERAL = ShannonSOCPeripheral
     SOC_CLK_BASE = 0x83000000
     CLK_PERIPHERAL = S337APClkPeripheral
+    IPC_PERIPHERAL = SIPCPeripheral
     TIMER_BASE = SOC_BASE + 0x8000
+    NUM_TIMERS = 6
+    iTINT0 = 34
+    GIC_MODEL = GicModel.A9_MPCORE
 
     # Overwrite the entry address to start at MAIN
     # Why? Well for some reason the WARM boot flags when set to 1,1 causes the BOOT
@@ -227,10 +238,16 @@ class S335AP(ShannonSOC):
     CHIP_ID = 0x03350000
     SIPC_BASE = 0x8F170000
     SHM_BASE = 0x48000000
+    SHM_PERIPHERAL = SHMPeripheral
     SOC_BASE = 0x83000000
+    SOC_PERIPHERAL = ShannonSOCPeripheral
     SOC_CLK_BASE = 0x83002000
     CLK_PERIPHERAL = S355APClkPeripheral
+    IPC_PERIPHERAL = SIPCPeripheral
     TIMER_BASE = SOC_BASE + 0xC000
+    NUM_TIMERS = 6
+    iTINT0 = 34
+    GIC_MODEL = GicModel.A9_MPCORE
 
     name = "S335AP"
 
@@ -248,6 +265,8 @@ class S335AP(ShannonSOC):
             )
         ]
 
+
+CORTEX_R_SOC = ["S335AP", "S337AP", "S353AP", "S355AP", "S360AP", "S5000AP"]
 
 register_soc("shannon", S335AP)
 register_soc("shannon", S337AP)

@@ -142,6 +142,30 @@ def find_current_task_ptr(data, offset):
     return None
 
 
+def find_current_task_ptr_a(data, offset):
+    bp = BinaryPattern("get_task_function", offset=0x0)
+    bp.from_hex("?? ?? ?? e3 ?? ?? ?? e3 00 01 91 e7 1e ff 2f e1")
+
+    locs = bp.findall(data, maxresults=2)
+
+    for loc in locs:
+        # make sure our find is byte aligned
+        if loc[0] & 0x3:
+            continue
+
+        instr1 = struct.unpack("<I", data[loc[0]: loc[0] + 4])[0]
+        if instr1 & 0xfff0f000 != 0xe3001000:  # movw r1, ??
+            continue
+        right = instr1 & 0x00000fff | (instr1 & 0x000f0000) >> 0x4
+        instr2 = struct.unpack("<I", data[loc[0] + 4: loc[0] + 8])[0]
+        if instr2 & 0xfff0f000 != 0xe3401000:  # movt r1, ??
+            continue
+        left = instr2 & 0x00000fff | (instr2 & 0x000f0000) >> 0x4
+        ptr = (left << 0x10) | right
+        return ptr
+    return None
+
+
 def find_schedulable_task_table(data, offset):
     bp = BinaryPattern("OSTaskGetArg0", offset=0x1C)
     bp.from_hex("420e50e3 0000a003 0200000a 08109fe5 000191e7 ??0090e5")
@@ -202,31 +226,346 @@ def find_exception_switch(data, offset):
 
     return None
 
-
+# S5123 is the first string found
+# S5123AP:G991BXXSIHYK1 is the second string found
 def find_queue_table(data, offset):
     bp = BinaryPattern("queue_name", offset=1)
     bp.from_str(b"\x00AdcTask\x00")
 
-    loc = bp.find(data)
+    # Find the null terminated strings like 'task'
+    locs = []
+    npos = 0
 
-    if loc is None:
+    # Iteratively mark the positions of the matching patterns.
+    while True:
+        res = bp.find(data, pos=npos)
+        if res is None:
+            break
+
+        npos = res[1]
+        locs += [res]
+    
+    
+    if len(locs) == 0:
         return None
 
-    xref_target = loc[0] + offset
+    if locs is None:
+        return None
+
+    xref_target = locs[0][0] + offset # absolute address in memory
 
     bp_x = BinaryPattern("xref")
     bp_x.from_str(struct.pack("I", xref_target))
-    rez = bp_x.find(data)
+    rez = bp_x.findall(data, maxresults=2)
 
+    if rez is None or len(rez) < 1:
+        # Try again but on the other string reference.
+        # It appears that S5123AP:G991BXXSIHYK1 uses locs[1][0] instead of locs[0][0] 
+        xref_target = locs[1][0] + offset
+        bp_task_x = BinaryPattern("xref")
+        bp_task_x.from_str(struct.pack("I", xref_target))
+        rez = bp_task_x.findall(data, maxresults=2)
     if rez is None:
         return None
 
-    ptr = rez[0]
+    ptr = rez[0][0] # first reference for both
 
     # AdcTask's queue is the third item in the list (might not be stable)
+    # Stable for S5123AP:G991BXXSIHYK1
     ptr -= QUEUE_STRUCT_SIZE * 2
 
     return offset + ptr
+
+
+def find_boot_mmu_table(data, offset):
+    print(f"find_boot_mmu_table: len(data)={len(data)}")
+    print(f"find_boot_mmu_table: table={data[0x2b76720]}")
+    struct_size = 0x10
+    num = 0x1b
+    for i in range(num):
+        off = 0x2b76720 + i * struct_size
+        entry_data = data[off: off + struct_size]
+        (addr, start, end, flags) = struct.unpack("<IIII", entry_data)
+        dst = (addr >> 0x12) | 0x40008000
+        val = addr & 0xfff00000 | flags | 2
+        print(f"addr={addr:#010x}, start={start:#010x}, end={end:#010x}, size={end-start:#010x}, flags={flags:#07x}, dst={dst:#010x}, val={val:#010x}")
+
+
+def validate_t1_bl(insn):
+    return ((insn >> 27) & 0x1f == 0x1e) and ((insn >> 14) & 3 == 3) and ((insn >> 12) & 1 == 1)
+
+
+def decode_thumb_bl_target(insn, insn_addr):
+    """
+    insn_addr: address of the first halfword (0x7f) of the BL instruction
+    returns:   32-bit target address
+    """
+
+    # Form halfwords in little-endian
+    hw1 = insn & 0xffff  # first halfword
+    hw2 = (insn >> 0x10) & 0xffff  # second halfword
+
+    # Extract fields (BL encoding, Thumb-2)
+    S = (hw1 >> 10) & 0x1
+    imm10 = hw1 & 0x03ff
+    J1 = (hw2 >> 13) & 0x1
+    J2 = (hw2 >> 11) & 0x1
+    imm11 = hw2 & 0x07ff
+
+    # Reconstruct I1, I2
+    I1 = (~(J1 ^ S)) & 0x1
+    I2 = (~(J2 ^ S)) & 0x1
+
+    # Build 25-bit immediate: S:I1:I2:imm10:imm11:0
+    imm25 = (S << 24) | \
+            (I1 << 23) | \
+            (I2 << 22) | \
+            (imm10 << 12) | \
+            (imm11 << 1)
+
+    # Sign-extend 25-bit immediate to 32 bits
+    if S:
+        imm32 = imm25 | (~0 << 25)
+    else:
+        imm32 = imm25
+
+    # In Thumb state, PC is instruction address + 4 (2-byte alignment)
+    pc = (insn_addr + 4) & ~0x1
+
+    # Target address
+    target = (pc + imm32) & 0xffffffff
+    return target
+
+
+def find_pal_sleep(data, offset):
+    bp = BinaryPattern("pal_Sleep", offset=8)
+    bp.from_hex("4af22010 c0f20700 ?+ 44f640?? ?+ c0f24c?? 00?? 0128 ?+ ??46 ?+ ??46")  # G991B, oriole
+
+    locs = bp.findall(data)
+    assert len(locs) == 1, f"Found more than one instance or failed to find any ({len(locs)})"
+
+    insn_addr = 0x40010000 + locs[0][0]
+    offset = locs[0][0]
+    insn = data[offset: offset + 4]
+    insn = struct.unpack("<I", insn)[0]
+    assert validate_t1_bl(insn), "Invalid instruction ({:#010x})".format(insn)
+
+    return decode_thumb_bl_target(insn, insn_addr)
+
+
+def decode_movw(insn):
+    # Form halfwords in little-endian
+    hw1 = insn & 0xffff  # first halfword
+    hw2 = (insn >> 0x10) & 0xffff  # second halfword
+
+    imm8 = hw2 & 0xff
+    imm3 = (hw2 >> 12) & 7
+    imm4 = hw1 & 0xf
+    i = (hw1 >> 10) & 1
+
+    imm32 = (imm4 << 12) | \
+            (i << 11) | \
+            (imm3 << 8) | \
+            (imm8)
+
+    return imm32
+
+
+def decode_movw_arm(insn):
+    imm12 = insn & 0x00000fff
+    imm4 = (insn >> 16) & 0x000f
+    return (imm4 << 12) | imm12
+
+
+def ror32(value, n):
+    n &= 31
+    return ((value >> n) | (value << (32 - n))) & 0xffffffff
+
+
+def thumb_expand_imm(imm12):
+    """
+    Implements ThumbExpandImm()/ThumbExpandImmWithC for the 12-bit
+    immediate i:imm3:imm8 (ARM ARM A5.2). Returns imm32.
+    """
+    top2 = (imm12 >> 10) & 0b11
+    if top2 == 0:
+        mode = (imm12 >> 8) & 0b11
+        imm8 = imm12 & 0xff
+
+        if mode == 0b00:
+            # 0x000000XY
+            return imm8
+        if imm8 == 0:
+            # UNPREDICTABLE; treat as 0 for robustness
+            return 0
+
+        if mode == 0b01:
+            # 0x00XY00XY
+            return (imm8 << 16) | imm8
+        elif mode == 0b10:
+            # 0xXY00XY00
+            return (imm8 << 24) | (imm8 << 8)
+        elif mode == 0b11:
+            # 0xXYXYXYXY
+            return (imm8 << 24) | (imm8 << 16) | (imm8 << 8) | imm8
+    else:
+        # rotated 1:imm7 pattern
+        imm7 = imm12 & 0x7f
+        rot = (imm12 >> 7) & 0x1f          # imm12<11:7>
+        unrot = ((1 << 7) | imm7) & 0xff   # '1':imm7
+        unrot32 = unrot                    # zero-extended
+        return ror32(unrot32, rot)
+
+
+def decode_mov_w(insn):
+    hw1 = insn & 0xffff  # first halfword
+    hw2 = (insn >> 0x10) & 0xffff  # second halfword
+
+    i = (hw1 >> 10) & 0x1
+    imm3 = (hw2 >> 12) & 0x7
+    imm8 = hw2 & 0xff
+
+    imm12 = (i << 11) | (imm3 << 8) | imm8
+    imm32 = thumb_expand_imm(imm12)
+    return imm32
+
+
+def decode_mov_immediate(insn, insn_len):
+    if insn_len == 2:
+        assert (insn >> 8) & 0xf8 == 0x20, "not a movs instruction: {:x}".format(insn)
+        return insn & 0xff
+    assert insn_len == 4, "invalid instruction len {}".format(insn_len)
+
+    hw1 = insn & 0xffff  # first halfword
+    # hw2 = (insn >> 0x10) & 0xffff  # second halfword
+
+    if hw1 & 0xf04f == 0xf04f:  # mov.w
+        return decode_mov_w(insn)
+    elif hw1 & 0xf240 == 0xf240:  # movw
+        return decode_movw(insn)
+    else:
+        raise ValueError("not a MOV (immediate) instruction: {:x}".format(insn))
+
+
+def find_sym_event_group_list(data, offset):
+    bp = BinaryPattern("SYM_EVENT_GROUP_LIST")
+    bp.from_hex("30482de9 0040a0e1 00300fe1 80000cf1 78009fe5 0110a0e3 9f2fd0e1 010052e1 02f02003 912fc011 01005211 f9ffff0a 59f07ff5 201094e5 4d00a0e3 000051e3 0000000a 3088bde8 ???????? 0410a0e1 805003e2 ???????? ???????? 380094e5")
+
+    locs = bp.findall(data)
+    assert len(locs) == 1, f"Found more than one instance or failed to find any ({len(locs)})"
+
+    offset = locs[0][1] - 0xc
+    insn2 = data[offset: offset + 4]
+    insn2 = struct.unpack("<I", insn2)[0]
+    addr_t = decode_movw_arm(insn2)
+
+    offset -= 0xc
+    insn1 = data[offset: offset + 4]
+    insn1 = struct.unpack("<I", insn1)[0]
+    addr_w = decode_movw_arm(insn1)
+
+    addr = (addr_t << 16) | addr_w
+    return addr
+
+
+def find_rf_hwid(data, offset):
+    bp = BinaryPattern("rf_hwid")
+    bp.from_hex("2de9f047 c4b0 0df11008 4ff48071 4046 ?+ d9f80010 0029")
+
+    locs = bp.findall(data)
+    assert len(locs) == 1, f"Found more than one instance or failed to find any ({len(locs)})"
+
+    offset = locs[0][1] - 14
+    insn1 = data[offset: offset + 4]
+    insn1 = struct.unpack("<I", insn1)[0]
+    addr_w = decode_movw(insn1)
+
+    insn2 = data[offset + 4: offset + 8]
+    insn2 = struct.unpack("<I", insn2)[0]
+    addr_t = decode_movw(insn2)
+
+    addr = (addr_t << 16) | addr_w
+    return addr
+
+
+def find_board_rf_config(data, offset):
+    bp = BinaryPattern("board_rf_config")
+    bp.from_hex("2de9f047 c4b0 0df11008 4ff48071 4046 ?+ d9f80010 0029 ?+ ?+ c928")
+
+    locs = bp.findall(data)
+    assert len(locs) == 1, f"Found more than one instance or failed to find any ({len(locs)})"
+
+    offset = locs[0][1] - 12
+    insn1 = data[offset: offset + 4]
+    insn1 = struct.unpack("<I", insn1)[0]
+    addr_w = decode_movw(insn1)
+
+    insn2 = data[offset + 4: offset + 8]
+    insn2 = struct.unpack("<I", insn2)[0]
+    addr_t = decode_movw(insn2)
+
+    addr = (addr_t << 16) | addr_w
+    return addr
+
+
+def find_trng_init(data, offset):
+    bp = BinaryPattern("trng_init", offset=10)
+    bp.from_hex("f0b5 81b0 0e46 0446 50b3 ???????? ???????? 0078 a0b9 ???????? 0128 10d0 ???????? 33a1 2de90f00 bff35f8f 01df bff35f8f bde80f00 ???????? 8160")
+
+    locs = bp.findall(data)
+    assert len(locs) == 1, f"Found more than one instance or failed to find any ({len(locs)})"
+
+    offset = locs[0][0]
+    insn1 = data[offset: offset + 4]
+    insn1 = struct.unpack("<I", insn1)[0]
+    addr_w = decode_movw(insn1)
+
+    insn2 = data[offset + 4: offset + 8]
+    insn2 = struct.unpack("<I", insn2)[0]
+    addr_t = decode_movw(insn2)
+
+    addr = (addr_t << 16) | addr_w
+    return addr
+
+
+def find_counter(data, offset):
+    bp = BinaryPattern("counter")
+    bp.from_hex("0168 0329 ?+ 01b0 bde8f08f ?+ 50 41 4c 54 73 6b 53 73 00")
+
+    locs = bp.findall(data)
+    assert len(locs) == 1, f"Found more than one instance or failed to find any ({len(locs)})"
+
+    offset = locs[0][0] - 8
+    insn1 = data[offset: offset + 4]
+    insn1 = struct.unpack("<I", insn1)[0]
+    addr_w = decode_movw(insn1)
+
+    insn2 = data[offset + 4: offset + 8]
+    insn2 = struct.unpack("<I", insn2)[0]
+    addr_t = decode_movw(insn2)
+
+    addr = (addr_t << 16) | addr_w
+    return addr
+
+
+def s5123_get_dsp_sync0(self, sym, data, offset):
+    insn_offset = sym.address - offset
+    insn = struct.unpack("<H", data[insn_offset: insn_offset + 2])[0]
+    sync_word = decode_mov_immediate(insn, 2)
+    self.symbol_table.set(sym.name, sync_word)
+    log.info(f"Retrieved sync word 0: {sync_word:#x}")
+
+    return True
+
+
+def s5123_get_dsp_sync1(self, sym, data, offset):
+    insn_offset = sym.address - offset
+    insn = struct.unpack("<I", data[insn_offset: insn_offset + 4])[0]
+    sync_word = decode_mov_immediate(insn, 4)
+    self.symbol_table.set(sym.name, sync_word)
+    log.info(f"Retrieved sync word 1: {sync_word:#x}")
+
+    return True
 
 
 def find_task_table(data, offset):
@@ -237,25 +576,36 @@ def find_task_table(data, offset):
     locs = []
     npos = 0
 
+    # Iteratively mark the positions of the matching patterns.
     while True:
         res = bp_task.find(data, pos=npos)
-
         if res is None:
             break
-
         npos = res[1]
         locs += [res]
-
+    
+    
     if len(locs) == 0:
         return None
+    
 
-    xref_target = locs[0][0] + offset
+    # Finds two locations of task
+    xref_target = locs[0][0] + offset 
 
     bp_task_x = BinaryPattern("xref")
-    bp_task_x.from_str(struct.pack("I", xref_target))
+    bp_task_x.from_str(struct.pack("I", xref_target)) 
+
     rez = bp_task_x.findall(data, maxresults=2)
 
-    if len(rez) < 2:
+    if rez is None or len(rez) < 2:
+        # Try again but on the other string reference.
+        # It appears that S5123AP:G991BXXSIHYK1 uses locs[1][0] instead of locs[0][0] 
+        xref_target = locs[1][0] + offset
+        bp_task_x = BinaryPattern("xref")
+        bp_task_x.from_str(struct.pack("I", xref_target))
+        rez = bp_task_x.findall(data, maxresults=2)
+    
+    if len(rez) < 2: 
         return None
 
     # the first result is another reference we dont care about
