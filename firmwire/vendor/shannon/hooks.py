@@ -13,6 +13,7 @@ from .queue import QUEUE_STRUCT_SIZE, QUEUE_NAME_PTR_OFFSET
 from firmwire.util.panda import read_cstring_panda
 
 log = logging.getLogger(__name__)
+NUM2FMT = {1: "B", 2: "H", 4: "I", 8: "Q"}
 
 ##########################################################
 ## HOOKS BEGIN
@@ -507,6 +508,25 @@ def NV_STUFF(self, cpustate, tb, hook):
     log.info("NV_STUFF this will take a while (time so far %.2f)", self.time_running())
     return True
 
+
+def warm_boot_change(self, cpustate, tb, hook, **kwargs):
+    soc_per = self.get_peripheral("SOC")
+    soc_per.warm_boot[1] = 0x1
+
+
+def protect_write_access(self, cpustate, memory_access_desc, label=None, const_value=0):
+    addr = memory_access_desc.addr
+    acc_size = memory_access_desc.size
+    format = NUM2FMT[acc_size]
+    (value,) = struct.unpack(format, panda.virtual_memory_read(cpustate, addr, acc_size))
+    value = const_value
+    panda.physical_memory_write(addr, struct.pack("<I", value))
+    offset = addr - memory_access_desc.hook.start_address
+    log_emit(
+        self, cpustate,
+        f"Protected write access: PC({cpustate.panda_guest_pc:#010x}) Addr({addr:#010x})" +
+        (f" ({label}+{offset:#x})" if label else "") + f" Value({value:#x})"
+    )
 
 ###############################
 

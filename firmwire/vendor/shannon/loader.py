@@ -23,7 +23,8 @@ from .hw import *
 from firmwire.hw.glink import GLinkPeripheral
 from firmwire.emulator.patterndb import PatternDB, PatternDBEntry
 from .machine import ShannonMachine
-from .pattern import PATTERNS
+from .pattern import PATTERNS_COMMON, PATTERNS_CORTEX_R, PATTERNS_CORTEX_A
+from .soc import CORTEX_R_SOC, CORTEX_A_SOC
 
 log = logging.getLogger(__name__)
 
@@ -46,6 +47,20 @@ class ARM_CORTEX_R7(ARM):
         pass
 
 
+class ARM_CORTEX_A78(ARM):
+    cpu_model = "cortex-a78"
+    qemu_name = "arm"
+    gdb_name = "arm"
+    angr_name = "arm"
+
+    capstone_arch = CS_ARCH_ARM
+    capstone_mode = CS_MODE_LITTLE_ENDIAN | CS_MODE_THUMB
+    keystone_arch = KS_ARCH_ARM
+    keystone_mode = KS_MODE_LITTLE_ENDIAN | KS_MODE_THUMB
+    unicorn_arch = UC_ARCH_ARM
+    unicorn_mode = UC_MODE_LITTLE_ENDIAN | UC_MODE_THUMB
+
+
 class ShannonLoader(firmwire.loader.Loader):
     NAME = "shannon"
     LOADER_ARGS = {
@@ -54,7 +69,10 @@ class ShannonLoader(firmwire.loader.Loader):
 
     @property
     def ARCH(self):
-        return ARM_CORTEX_R7
+        if self.modem_soc.name in CORTEX_A_SOC:
+            return ARM_CORTEX_A78
+        else:
+            return ARM_CORTEX_R7
 
     @staticmethod
     def is_relevant(path):
@@ -82,6 +100,11 @@ class ShannonLoader(firmwire.loader.Loader):
 
         try:
             db = PatternDB(self)
+            PATTERNS = PATTERNS_COMMON.copy()
+            if self.modem_soc.name in CORTEX_A_SOC:
+                PATTERNS.update(PATTERNS_CORTEX_A)
+            elif self.modem_soc.name in CORTEX_R_SOC:
+                PATTERNS.update(PATTERNS_CORTEX_R)
 
             for name, entry in PATTERNS.items():
                 pat = PatternDBEntry(name)
@@ -107,24 +130,42 @@ class ShannonLoader(firmwire.loader.Loader):
 
     def build_memory_map(self):
         #######################
-        # MPU Memory Map
+        # MPU/MMU Memory Map
         #######################
 
-        modem_main = self.modem_file.get_section("MAIN")
-        sym = self.symbol_table.lookup("boot_mpu_table")
-        if sym is None:
-            log.error(
-                "Unable to find MPU table in modem binary. Cannot create memory map"
-            )
-            return False
+        if self.modem_soc.name == "S5123":
+            from firmwire.vendor.shannon.mmu import MMUEntry
+            modem_main = self.modem_file.get_section("MAIN")
+            sym = self.symbol_table.lookup("main_mmu_table")
+            if sym is None:
+                log.error(
+                    "Unable to find MPU table in modem binary. Cannot create memory map"
+                )
+                return False
 
-        mpu_entries = shannon.mpu.parse_mpu_table(modem_main, sym.address)
-        table = shannon.mpu.consolidate_mpu_table(mpu_entries)
+            mem_entries, unsafe_regions = shannon.mmu.parse_mmu_table(modem_main, sym.address)
+            # To inject task
+            mem_entries.append(
+                MMUEntry(1313, 0x70000000, 0x00100000, 0x11c0c),
+            )
+            self.unsafe_regions.extend(unsafe_regions)
+        else:
+            modem_main = self.modem_file.get_section("MAIN")
+            sym = self.symbol_table.lookup("boot_mpu_table")
+            if sym is None:
+                log.error(
+                    "Unable to find MPU table in modem binary. Cannot create memory map"
+                )
+                return False
+
+            mem_entries = shannon.mpu.parse_mpu_table(modem_main, sym.address)
+
+        table = shannon.mpu.consolidate_mpu_table(mem_entries)
         self.mpu_table = table
 
         for entry in table:
             mpu = entry.mpu
-            name = "MPU%d_%08x" % (mpu.slot, entry.start)
+            name = "MEM%d_%08x" % (mpu.slot, entry.start)
             self.add_memory_range(
                 entry.start, entry.size, name=name, permissions=mpu.get_rwx_str()
             )
@@ -148,7 +189,7 @@ class ShannonLoader(firmwire.loader.Loader):
                     fp.write(entry.data)
 
                 # TODO: add memory map merging to prevent this hardcode
-                if entry.name == "MAIN":
+                if entry.name == "MAIN" and self.modem_soc.name in CORTEX_R_SOC:
                     size = 0x3000000
 
                 # round up and page align
@@ -179,50 +220,42 @@ class ShannonLoader(firmwire.loader.Loader):
         for peripheral in self.modem_soc.peripherals:
             self.create_soc_peripheral(peripheral)
 
-        self.create_timer(self.modem_soc.TIMER_BASE + 0x000, 0x100, "tim0", 34, 100000)
-        self.create_timer(self.modem_soc.TIMER_BASE + 0x100, 0x100, "tim1", 35, 6000000)
-        self.create_timer(self.modem_soc.TIMER_BASE + 0x200, 0x100, "tim2", 36, 6000000)
-        self.create_timer(self.modem_soc.TIMER_BASE + 0x300, 0x100, "tim3", 37, 6000000)
-        self.create_timer(self.modem_soc.TIMER_BASE + 0x400, 0x100, "tim4", 38, 6000000)
-        self.create_timer(self.modem_soc.TIMER_BASE + 0x500, 0x100, "tim5", 39, 6000000)
-
-        self.create_peripheral(ShannonTCU, 0x8200F000, 0x100, name="TCU")
+        for i in range(self.modem_soc.NUM_TIMERS):
+            freq = 6000000
+            if i == 0:
+                freq = 100000
+            self.create_timer(
+                self.modem_soc.TIMER_BASE + i * 0x100, 0x100,
+                "tim{}".format(i), self.modem_soc.iTINT0 + i, freq,
+                gic_model=self.modem_soc.GIC_MODEL)
 
         self.create_peripheral(
-            self.modem_soc.CLK_PERIPHERAL,
-            self.modem_soc.SOC_CLK_BASE,
-            0xA000,
-            name="SOC_CLK",
-        )
-
-        # This has the CHIP_ID
+            self.modem_soc.CLK_PERIPHERAL, self.modem_soc.SOC_CLK_BASE, 0xA000, name="SOC_CLK")
         self.create_peripheral(
-            ShannonSOCPeripheral, self.modem_soc.SOC_BASE, 0x2000, name="SOC"
-        )
-
+            self.modem_soc.SOC_PERIPHERAL, self.modem_soc.SOC_BASE, 0x2000, name="SOC")
         self.create_peripheral(UARTPeripheral, 0x84000000, 0x1000, name="boot_uart")
-        self.create_peripheral(Unknown2Peripheral, 0x81002000, 0x1000, name="unk_per8")
-
-        # @ 40000958: 0x4b200c00
-        # This contains CHIP MODE and communication FIFO
-        # Matches with DTB from Kernel offset
-        # modem-s5000ap-sipc-pdata.dtsi (shmem,ipc_offset = <0xB200000>)
         self.create_peripheral(
-            SHMPeripheral, self.modem_soc.SHM_BASE, 0x500000, name="SHM"
-        )
-
-        # @ 40000834: 8f920008
+            self.modem_soc.SHM_PERIPHERAL, self.modem_soc.SHM_BASE, 0x500000, name="SHM")
         self.create_peripheral(
-            SIPCPeripheral, self.modem_soc.SIPC_BASE, 0x1000, name="SIPC"
-        )
+            self.modem_soc.IPC_PERIPHERAL, self.modem_soc.SIPC_BASE, 0x1000, name="SIPC")
 
-        # 0x8f900080 @ 0x4103e6f6: ldr     r3, [r0]
-        self.create_peripheral(LoggingPeripheral, 0x8F900000, 0x1000, name="unk_per10")
+        if self.modem_soc.name in CORTEX_R_SOC:
+            self.create_peripheral(ShannonTCU, 0x8200F000, 0x100, name="TCU")
 
-        self.create_peripheral(LoggingPeripheral, 0x8FC30000, 0x1000, name="usi1")
-        self.create_peripheral(LoggingPeripheral, 0x8FC22000, 0x1000, name="usi2")
-        self.create_peripheral(LoggingPeripheral, 0x8FC60000, 0x1000, name="usi3")
-        self.create_peripheral(LoggingPeripheral, 0x8FD20000, 0x1000, name="usi4")
+            self.create_peripheral(LoggingPeripheral, 0x8F900000, 0x1000, name="unk_per10")
+            self.create_peripheral(LoggingPeripheral, 0x8FC30000, 0x1000, name="usi1")
+            self.create_peripheral(LoggingPeripheral, 0x8FC22000, 0x1000, name="usi2")
+            self.create_peripheral(LoggingPeripheral, 0x8FC60000, 0x1000, name="usi3")
+            self.create_peripheral(LoggingPeripheral, 0x8FD20000, 0x1000, name="usi4")
+
+            self.create_peripheral(MarconiPeripheral, 0xC1800000, 0x5000, name="marconi")
+            self.create_peripheral(CyclicBitPeripheral, 0xC2000000, 0x1000, name="marconi2")
+        elif self.modem_soc.name in ("S5123", ):
+            self.create_mc_timer(0x840f0000, 0x1000)
+            self.create_peripheral(UARTPeripheral, 0x84010000, 0x1000, name="uart2")
+            self.create_peripheral(Unknown2Peripheral, 0x81020000, 0x1000, name="unk_per8")
+            self.create_peripheral(CyclicBitPeripheral, 0x14500000, 0x5000, name="marconi")
+            self.create_peripheral(CyclicBitPeripheral, 0x14420000, 0x1000, name="marconi2")
 
         if self.modem_file.has_section("NV"):
             nv = self.modem_file.get_section("NV")
@@ -281,17 +314,42 @@ class ShannonLoader(firmwire.loader.Loader):
                 nv_base_address, nv_data_size, name="NV", permissions="rw-"
             )
 
-        self.add_memory_range(
-            0x80000000,
-            0x2000,
-            name="gic",
-            qemu_name="a9mpcore_priv",  # hopefully close enough
-            qemu_properties=[
-                {"name": "num_cpu", "value": 1, "type": "int"},
-                # max supported by shannon (0xLAB_42393f48)
-                {"name": "num_irq", "value": 0x12A, "type": "int"},
-            ],
-        )
+        if self.modem_soc.name == "S5123AP":
+            self.add_memory_range(
+                0x81040000,
+                0x8000,
+                name="gic",
+                qemu_name="a15mpcore_priv",  # hopefully close enough
+                qemu_properties=[
+                    {"name": "num_cpu", "value": 1, "type": "int"},
+                    # max supported by shannon (0xLAB_42393f48)
+                    {"name": "num_irq", "value": 0x12A, "type": "int"},
+                ],
+            )
+        elif self.modem_soc.name == "S5123":
+            self.add_memory_range(
+                0x800f0000,
+                0x8000,
+                name="gic",
+                qemu_name="a15mpcore_priv",  # hopefully close enough
+                qemu_properties=[
+                    {"name": "num_cpu", "value": 1, "type": "int"},
+                    # max supported by shannon (0xLAB_42393f48)
+                    {"name": "num_irq", "value": 0x12A, "type": "int"},
+                ],
+            )
+        else:
+            self.add_memory_range(
+                0x80000000,
+                0x2000,
+                name="gic",
+                qemu_name="a9mpcore_priv",  # hopefully close enough
+                qemu_properties=[
+                    {"name": "num_cpu", "value": 1, "type": "int"},
+                    # max supported by shannon (0xLAB_42393f48)
+                    {"name": "num_irq", "value": 0x12A, "type": "int"},
+                ],
+            )
 
         self.add_memory_annotation(0x44200000, 0x1400000, "sysmem")
         self.add_memory_annotation(0x04000000, 0x1D000, "BIOS")
@@ -315,11 +373,12 @@ class ShannonLoader(firmwire.loader.Loader):
 
         return True
 
-    def create_timer(self, start, size, name, irq_num, freq=1000000):
+    def create_timer(self, start, size, name, irq_num, freq=1000000, gic_model=0):
         self.add_memory_range
         props = [
             {"type": "uint32", "name": "irq_num", "value": irq_num},
             {"type": "uint32", "name": "freq", "value": freq},
+            {"type": "uint32",  "name": "gic_model", "value": gic_model},
         ]
         mr = self.add_memory_range(
             start,
@@ -327,6 +386,17 @@ class ShannonLoader(firmwire.loader.Loader):
             name=name,
             qemu_name="shannon_timer",
             qemu_properties=props,
+            permissions="rw-",
+        )
+        return mr
+
+    def create_mc_timer(self, start, size):
+        self.add_memory_range
+        mr = self.add_memory_range(
+            start,
+            size,
+            name="MC_TIMER",
+            qemu_name="exynos4210.mct",
             permissions="rw-",
         )
         return mr
@@ -414,6 +484,18 @@ class ShannonLoader(firmwire.loader.Loader):
             re.M | re.S | re.X,
         )
 
+        if found is None:
+            found = re.search(
+                rb"""
+              (?P<SOC>[S][0-9]{4,}(AP)?) # SOC-ID
+              .{,30}                     # garbage or unknown (usually underscores)
+              (?P<date>[0-9]{6})         # Date as YYYYMMDD (for rough SoC revision)
+              .{,10}
+              [^\x00]*                   # null terminator""",
+                main.data,
+                re.M | re.S | re.X,
+            )
+
         # First pattern may fail for some OEM modified Shannon images
         if found is None:
             found = re.search(
@@ -442,8 +524,22 @@ class ShannonLoader(firmwire.loader.Loader):
         if soc_guess == "S337AP" and b'MOTOONE' in found.group():
             soc_date = int(found.group().split(b"SGCS_QB")[-1])
 
-
         self.modem_soc = get_soc(self.NAME, soc_guess)
+
+        if self.modem_soc is None:
+            found = re.search(
+                rb"""
+              \x00
+              (?P<SOC>[S][0-9]{3,}(AP)?) # SOC-ID
+              .{,10}                     # garbage or unknown (usually underscores)
+              [^\x00]*                   # null terminator""",
+                main.data,
+                re.M | re.S | re.X,
+            )
+            if found:
+                soc_guess = found.group("SOC").decode()
+                self.modem_soc = get_soc(self.NAME, soc_guess)
+                soc_date = 0
 
         if self.modem_soc is None:
             log.error("Guessed SoC '%s' is not supported", soc_guess)

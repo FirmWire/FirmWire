@@ -43,7 +43,7 @@ class TOCFile(object):
 
         for e in self.entries:
             # skip entries that are just a memory map placeholder
-            if e.offset == 0 or e.load_address == 0:
+            if (e.offset == 0 or e.load_address == 0) and e.name != "BOOT":
                 e.meta_section = True
                 continue
 

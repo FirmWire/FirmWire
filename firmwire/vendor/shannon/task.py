@@ -16,8 +16,8 @@ class TaskLayout(ABC):
         return cls.TASK_STRUCT_SIZE
 
 
-class SamsungTaskLayout(TaskLayout):
-    NAME = "samsung"
+class SamsungTaskLayoutCortexR(TaskLayout):
+    NAME = "samsung-r"
 
     TASK_STRUCT_SIZE = 0x108
 
@@ -31,6 +31,24 @@ class SamsungTaskLayout(TaskLayout):
     SUBTASK_MAGIC_OFFSET = 0x8
     SUBTASK_NAME_OFFSET = 0x5C
     SUBTASK_TASK_P_OFFSET = 0x68
+    SUBTASK_NAME_SIZE = 0x8
+
+
+class SamsungTaskLayoutCortexA(TaskLayout):
+    NAME = "samsung-a"
+
+    TASK_STRUCT_SIZE = 0x240
+
+    TASK_STACKBASE_OFFSET = 0x10
+    TASK_NAME_PTR_OFFSET = 0x24
+    TASK_SCHED_PRIO_OFFSET = 0x28
+    TASK_STACKSIZE_OFFSET = 0x2C
+    TASK_MAIN_FN_OFFSET = 0x30
+    TASK_PRE_FN_OFFSET = 0x34
+
+    SUBTASK_MAGIC_OFFSET = 0x8
+    SUBTASK_NAME_OFFSET = 0x24
+    SUBTASK_TASK_P_OFFSET = 0x140
     SUBTASK_NAME_SIZE = 0x8
 
 
@@ -54,14 +72,15 @@ class MotoTaskLayout(TaskLayout):
 
 TASK_LAYOUT_BY_NAME = OrderedDict(
     {
-        SamsungTaskLayout.NAME: SamsungTaskLayout,
+        SamsungTaskLayoutCortexR.NAME: SamsungTaskLayoutCortexR,
+        SamsungTaskLayoutCortexA.NAME: SamsungTaskLayoutCortexA,
         MotoTaskLayout.NAME: MotoTaskLayout,
     }
 )
 
 
 def get_task_layout_by_name(name):
-    return TASK_LAYOUTS_BY_NAME[name]
+    return TASK_LAYOUT_BY_NAME[name]
 
 
 def get_task_layouts():
