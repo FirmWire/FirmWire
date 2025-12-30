@@ -413,15 +413,35 @@ class MT6878Machine(FirmWireEmu):
                 symbols["MML1_RF_Wait_us"] + 1,
                 # TODO: mutexes do not seem to be set up here
                 symbols["ccismc_submit_ior"] + 1,  # symbols['enqueue_gpd']+1
+                symbols["drv_idc_init"] + 1,
+                symbols["el1_idc_init"] + 1, # We need EL1 for LTE NAS, but EL1_IDC and EL1D partially fail to boot
+                symbols["el1c_init2"] + 1,
+                symbols["EL1D_TC_HW_Init"] + 1,
+                symbols["EL1D_TC_HW_Disable_All_IRQ"] + 1,
+                symbols["EL1D_RFCC_Init"] + 1,
+                symbols["EL1D_Main_Common_Init"] + 1,
+                symbols["emacdl_init"] + 1,
+                symbols["el1_chmgm_errc_cfg_req_in_idle"] + 1,
+                symbols["errc_com_start_timer"] + 1, # Disable a bunch of timers which do not work
+                symbols["errc_com_stop_timer"] + 1,
+                symbols["CEmmTimerMng::startTimer"] + 1,
+                symbols["CEmmTimerMng::stopTimer"] + 1,
+                symbols["sms_start_timer"] + 1,
+                symbols["sms_stop_timer"] + 1,
+                symbols["smsal_start_timer"] + 1,
+                symbols["smsal_stop_timer"] + 1 ,
+                symbols["ssipc_simslot_check"] + 1, # SMS
+                symbols["ss_log_msg_tag"] + 1, # SMS
+                symbols["epdcp_ulproc_dcch_data_req_hndlr"] + 1,
+                symbols["_ulproc_send_dcch_data_cnf"] + 1, # prevent problems due to missing RLC ACKs
             ]
         )
 
-        def skip_function_bp(x):
-            ra = qemu.read_register("ra")
-            qemu.write_register("pc", ra)
-
         for addr in skip_functions:
-            self.set_breakpoint(addr & ~1, skip_function_bp, continue_after=True)
+            # Performance optimization: Skip via writing a "ret" instruction to memory
+            # Rather than using a breakpoint
+            ret = b"\xa0\xe8\x00\x65" # JRC ra
+            self.panda.physical_memory_write(addr & ~1, ret)
 
         def exit_hook(self, env, tb, hook):
             print(
@@ -570,11 +590,13 @@ class MT6878Machine(FirmWireEmu):
             print("*** skipping assert")
             qemu.write_register("pc", symbols["errc_evth_inevt_handler_end"] + 1)
 
-        self.set_breakpoint(
-            symbols["errc_evth_inevt_handler_assert"],
-            skip_assert_bp,
-            continue_after=True,
-        )
+        # Un-comment the following block to skip asserts that occur when fuzzing without restoring a memory dump
+        # NOTE: This means you only fuzz early stage processing (e.g. ASN.1 parsing)
+        # self.set_breakpoint(
+        #     symbols["errc_evth_inevt_handler_assert"],
+        #     skip_assert_bp,
+        #     continue_after=True,
+        # )
 
         if not self._fuzzing:
             self.add_panda_hook(symbols["dhl_internal_trace_impl"], dhl_trace_hook)
