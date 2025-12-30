@@ -22,6 +22,7 @@ from firmwire.vendor.mtk.hooks import (
     msg_send_hook
 )
 from firmwire.vendor.mtk.mtk_task import MtkTask, TASK_STRUCT_SIZE
+from firmwire.vendor.mtk.mtkdb.memory_dump import MtkMemoryDump
 
 from firmwire.util.port import find_free_port
 from firmwire.emulator.firmwire import FirmWireEmu
@@ -814,3 +815,21 @@ class MT6878Machine(FirmWireEmu):
         )
 
         return task.address
+
+    def load_memory_dump(self):
+        self._mtk_memory_dump = MtkMemoryDump(self.get_memory_dump_file_path())
+
+
+    def restore_memory_dump(self):
+        log.info("Restoring memory dump")
+        count = 0
+        for (addr, size) in self.get_mem_dump_addrs():
+            buf = self._mtk_memory_dump.get(addr, size)
+            if buf is None:
+                continue
+
+            self.qemu.pypanda.physical_memory_write(addr, buf)
+            count += 1
+            if count % 500 == 0:
+                log.debug(f"Restored {count} chunks from memory dump...")
+        log.info(f"Memory dump recovery completed, restored {count} chunks")

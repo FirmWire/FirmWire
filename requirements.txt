@@ -22,6 +22,7 @@ pyelftools
 requests
 # MTK required
 filetype
+python-snappy==0.7.3
 # Below required for pypanda
 cffi
 protobuf
