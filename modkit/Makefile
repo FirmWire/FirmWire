@@ -2,7 +2,7 @@
 ## SPDX-License-Identifier: BSD-3-Clause
 TOPTARGETS := all clean
 
-SUBDIRS := $(wildcard */.)
+SUBDIRS := mtk shannon
 
 $(TOPTARGETS): $(SUBDIRS)
 $(SUBDIRS):
