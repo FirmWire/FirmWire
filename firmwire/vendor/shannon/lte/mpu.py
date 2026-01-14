@@ -4,17 +4,16 @@ import struct
 import intervaltree
 import logging
 
+from firmwire.vendor.shannon.common.mem import MemEntry
+
 AP_NAME = ["NA", "P_RW", "P_RW/U_RO", "RW", "RESV", "P_RO/U_NA", "RO", "RESV"]
 
 log = logging.getLogger(__name__)
 
 
-class MPUEntry(object):
+class MPUEntry(MemEntry):
     def __init__(self, slot, base, size, flags):
-        self.slot = slot
-        self.base = base
-        self.size = size
-        self.flags = flags
+        super().__init__(base, size, flags, slot)
 
         XN = (flags >> 12) & 1
         AP = (flags >> 8) & 0b111
@@ -26,12 +25,6 @@ class MPUEntry(object):
         self.executable = not bool(XN)
         self.writable = AP == 1 or AP == 2 or AP == 3
         self.readable = AP != 0 and AP != 4 and AP != 7
-
-    def get_start(self):
-        return self.base
-
-    def get_end(self):
-        return self.base + self.size - 1
 
     def get_rwx_str(self):
         r = "r" if self.readable else "-"

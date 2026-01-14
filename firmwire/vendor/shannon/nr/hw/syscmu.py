@@ -1,6 +1,6 @@
 from avatar2 import *
 
-from firmwire.vendor.shannon.hw import LoggingPeripheral
+from . import LoggingPeripheral
 
 
 class SysCmuPeripheral(LoggingPeripheral):

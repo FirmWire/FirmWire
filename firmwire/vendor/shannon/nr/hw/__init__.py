@@ -1,3 +1,5 @@
+from firmwire.hw.peripheral import *
+
 from .ClkPeripheral import *
 from .DSPPeripheral import DSPPeripheralCortexA
 from .ipc import GIPCPeripheral

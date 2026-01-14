@@ -1,6 +1,6 @@
 import struct
 
-import firmwire.vendor.shannon.mpu as mpu
+from firmwire.vendor.shannon.common.mem import MemEntry
 
 AP_STR = {
     0b000: "--", 0b001: "rw", 0b010: "rw", 0b011: "rw",
@@ -8,12 +8,9 @@ AP_STR = {
 }
 
 
-class MMUEntry(mpu.MPUEntry):
+class MMUEntry(MemEntry):
     def __init__(self, slot, base, size, flags):
-        self.slot = slot
-        self.base = base
-        self.size = size
-        self.flags = flags
+        super().__init__(base, size, flags, slot)
         self.prot = extract_prot_from_flags(flags)
 
         self.executable = True if "x" in self.prot else False

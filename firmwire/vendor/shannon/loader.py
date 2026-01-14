@@ -15,16 +15,18 @@ from .TOCFile import *
 from avatar2 import *
 
 import firmwire.vendor.shannon as shannon
-import firmwire.vendor.shannon.mpu
-import firmwire.vendor.shannon.soc
+import firmwire.vendor.shannon.lte.mpu
+import firmwire.vendor.shannon.lte.soc
 
 from firmwire.hw.soc import get_soc
-from .hw import *
+from .lte.hw import *
+from .nr.hw import *
 from firmwire.hw.glink import GLinkPeripheral
 from firmwire.emulator.patterndb import PatternDB, PatternDBEntry
 from .machine import ShannonMachine
 from .pattern import PATTERNS_COMMON, PATTERNS_CORTEX_R, PATTERNS_CORTEX_A
-from .soc import CORTEX_R_SOC, CORTEX_A_SOC
+from .lte.soc import CORTEX_R_SOC
+from .nr.soc import CORTEX_A_SOC
 
 log = logging.getLogger(__name__)
 
@@ -134,7 +136,7 @@ class ShannonLoader(firmwire.loader.Loader):
         #######################
 
         if self.modem_soc.name == "S5123":
-            from firmwire.vendor.shannon.mmu import MMUEntry
+            from firmwire.vendor.shannon.nr.mmu import MMUEntry
             modem_main = self.modem_file.get_section("MAIN")
             sym = self.symbol_table.lookup("main_mmu_table")
             if sym is None:
@@ -143,7 +145,7 @@ class ShannonLoader(firmwire.loader.Loader):
                 )
                 return False
 
-            mem_entries, unsafe_regions = shannon.mmu.parse_mmu_table(modem_main, sym.address)
+            mem_entries, unsafe_regions = shannon.nr.mmu.parse_mmu_table(modem_main, sym.address)
             # To inject task
             mem_entries.append(
                 MMUEntry(1313, 0x70000000, 0x00100000, 0x11c0c),
@@ -158,9 +160,9 @@ class ShannonLoader(firmwire.loader.Loader):
                 )
                 return False
 
-            mem_entries = shannon.mpu.parse_mpu_table(modem_main, sym.address)
+            mem_entries = shannon.lte.mpu.parse_mpu_table(modem_main, sym.address)
 
-        table = shannon.mpu.consolidate_mpu_table(mem_entries)
+        table = shannon.lte.mpu.consolidate_mpu_table(mem_entries)
         self.mpu_table = table
 
         for entry in table:

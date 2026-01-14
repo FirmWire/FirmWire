@@ -5,7 +5,8 @@ import struct
 from .queue import QUEUE_STRUCT_SIZE, QUEUE_NAME_PTR_OFFSET
 from .task import Task
 from firmwire.util.panda import read_cstring_panda
-from firmwire.vendor.shannon.soc import CORTEX_R_SOC, CORTEX_A_SOC
+from firmwire.vendor.shannon.lte.soc import CORTEX_R_SOC
+from firmwire.vendor.shannon.nr.soc import CORTEX_A_SOC
 
 
 class ShannonOSI:

@@ -7,7 +7,7 @@ import sys
 import time
 
 import firmwire.vendor.shannon as shannon
-import firmwire.vendor.shannon.soc
+import firmwire.vendor.shannon.lte.soc
 import firmwire.vendor.shannon.hooks
 import firmwire.util.logging
 import avatar2

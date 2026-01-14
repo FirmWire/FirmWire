@@ -3,7 +3,7 @@ import struct
 from avatar2 import *
 
 from firmwire.hw.fifo import CircularFIFO
-from firmwire.vendor.shannon.hw import FirmWirePeripheral
+from . import FirmWirePeripheral
 
 memory_map = {
     "magic": 0x00,
