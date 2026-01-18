@@ -49,6 +49,7 @@ class FirmWireEmu(ABC):
         self.start_time = None
         self._gsmtap_ip = None
         self._mem_dump_config = { "dump_file": None, "load_at": None, "load_after_snapshot": False, "addrs": None, "enabled": False }
+        self.memory_tracing_enabled = str(os.environ.get("ENABLE_MEMORY_TRACING", 0)) == '1'
 
     def set_breakpoint(self, address, handler, temporary=False, continue_after=False):
         """
@@ -752,6 +753,7 @@ class FirmWireEmu(ABC):
 
         self.load_memory_dump()
         self.set_breakpoint(self._mem_dump_config["load_at"], self.mem_dump_load_hook, continue_after=True, temporary=True)
+        self.memory_tracing_enabled = False # disable memory tracing when using memory dumps until dump is restored
 
     def is_memory_dump_enabled(self):
         """Check if memory dump loading is enabled"""

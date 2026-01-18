@@ -627,6 +627,37 @@ class MT6878Machine(FirmWireEmu):
 
         fcntl.fcntl(sys.stdout.fileno(), fcntl.F_SETFL, 0)  # remove non-block
 
+        if str(os.environ.get("ENABLE_MEMORY_TRACING", 0)) == '1':
+            sorted_function_starts = sorted(self.symbols.values(), reverse=True)
+            self.function_memory_access = {'r': [], 'w': []}
+
+            def get_containing_fn(addr):
+                return next((curr_fn_addr for curr_fn_addr in sorted_function_starts if curr_fn_addr <= addr), list(sorted_function_starts)[0])
+
+
+            @qemu.pypanda.cb_phys_mem_before_write
+            def mem_before_write(env, pc, addr, size, buf):
+                if not self.memory_tracing_enabled:
+                    return
+
+                ra = self.qemu.pypanda.arch.get_reg(env, "RA")
+                obj = {"addr": addr, "length": size, "pc": pc, "ra": ra, "fn": get_containing_fn(pc), "fn_ra": get_containing_fn(ra)}
+                self.function_memory_access['w'].append(obj)
+                sys.stdout.write(f"\nMEM_WRITE: {json.dumps(obj)}\n")
+                sys.stdout.flush()
+
+            @qemu.pypanda.cb_phys_mem_before_read
+            def mem_before_read_hook(env, pc, addr, size):
+                if not self.memory_tracing_enabled:
+                    return
+
+                ra = self.qemu.pypanda.arch.get_reg(env, "RA")
+                obj = {"addr": addr, "length": size, "pc": pc, "ra": ra, "fn": get_containing_fn(pc), "fn_ra": get_containing_fn(ra)}
+                self.function_memory_access['r'].append(obj)
+                sys.stdout.write(f"\nMEM_READ: {json.dumps(obj)}\n")
+                sys.stdout.flush()
+
+
         # @qemu.pypanda.ppp("callstack_instr", "on_call")
         # def on_call(cpu, func):
         #    print(f"Call to 0x{func:x}")
@@ -855,3 +886,5 @@ class MT6878Machine(FirmWireEmu):
             if count % 500 == 0:
                 log.debug(f"Restored {count} chunks from memory dump...")
         log.info(f"Memory dump recovery completed, restored {count} chunks")
+        self.memory_tracing_enabled = str(os.environ.get("ENABLE_MEMORY_TRACING", 0)) == '1'
+
