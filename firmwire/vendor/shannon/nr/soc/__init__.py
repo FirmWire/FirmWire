@@ -2,6 +2,7 @@ from ..hw import *
 from firmwire.hw.soc import SOCPeripheral, register_soc
 from firmwire.vendor.shannon.common.hw import GicModel
 from firmwire.vendor.shannon.common.soc import ShannonSOC
+from firmwire.vendor.shannon.nr.hw.sipc import SIPCPeripheral
 
 class S5123(ShannonSOC):
     peripherals = []
@@ -36,7 +37,45 @@ class S5123(ShannonSOC):
             SOCPeripheral(Unknown11Peripheral,  0x83050000, 0x1000, name="UNK11"),
         ]
 
+class S5123AP(ShannonSOC):
+    peripherals = [
+        
+    ]
 
-CORTEX_A_SOC = ["S5123"]
+    CHIP_ID = 0x50000000
+    SIPC_BASE = 0x8F940000
+    SHM_BASE = 0x50000000
+    SOC_BASE = 0x82020000 
+    SOC_CLK_BASE = 0x8a000000 
+    CLK_PERIPHERAL = S5123APClkPeripheral
+    SOC_PERIPHERAL = ShannonSOCPeripheralCortexA
+    SHM_PERIPHERAL = SHMPeripheralCortexA
+    IPC_PERIPHERAL = SIPCPeripheral
+
+    TIMER_BASE = SOC_BASE + 0x50000  # Timer IRQ already taken.
+    NUM_TIMERS = 6
+    iTINT0 = 32
+
+    GIC_MODEL = GicModel.A15_MPCORE
+    
+
+    name = "S5123AP"
+
+    def __init__(self, date, main_section):
+        super().__init__(date, main_section)
+
+        self.peripherals += [
+            SOCPeripheral(
+                DSPPeripheralCortexA,
+                0x4a75a000, # G991BXXSIHYK1 DSP base
+                0x1000,
+                name="DSPPeripheral",
+                sync=[0xc1, 0x1bc],
+            ),
+        ]
+
+
+CORTEX_A_SOC = ["S5123", "S5123AP"]
 
 register_soc("shannon", S5123)
+register_soc("shannon", S5123AP)

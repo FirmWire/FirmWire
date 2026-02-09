@@ -21,12 +21,16 @@ import firmwire.vendor.shannon.lte.soc
 from firmwire.hw.soc import get_soc
 from .lte.hw import *
 from .nr.hw import *
+from .nr.hw.uart import UARTPeripheral as nr_UARTPeripheral
 from firmwire.hw.glink import GLinkPeripheral
 from firmwire.emulator.patterndb import PatternDB, PatternDBEntry
 from .machine import ShannonMachine
 from .pattern import PATTERNS_COMMON, PATTERNS_CORTEX_R, PATTERNS_CORTEX_A
 from .lte.soc import CORTEX_R_SOC
 from .nr.soc import CORTEX_A_SOC
+
+from firmwire.vendor.shannon.nr.hw.mc_timer import McTimerPeripheral
+from firmwire.vendor.shannon.nr.hw.syscfg import SysCfgPeripheral
 
 log = logging.getLogger(__name__)
 
@@ -151,6 +155,23 @@ class ShannonLoader(firmwire.loader.Loader):
                 MMUEntry(1313, 0x70000000, 0x00100000, 0x11c0c),
             )
             self.unsafe_regions.extend(unsafe_regions)
+            
+        elif self.modem_soc.name == "S5123AP":
+            from firmwire.vendor.shannon.nr.mmu import MMUEntry
+            modem_main = self.modem_file.get_section("MAIN")
+            sym = self.symbol_table.lookup("main_mmu_table")
+            if sym is None:
+                log.error(
+                    "Unable to find MPU table in modem binary. Cannot create memory map"
+                )
+                return False
+
+            mem_entries, unsafe_regions = shannon.nr.mmu.parse_mmu_table_2(modem_main, sym.address)
+            # To inject task
+            mem_entries.append(
+                MMUEntry(1313, 0x70000000, 0x00100000, 0x11c0c),
+            )
+            self.unsafe_regions.extend(unsafe_regions)
         else:
             modem_main = self.modem_file.get_section("MAIN")
             sym = self.symbol_table.lookup("boot_mpu_table")
@@ -252,12 +273,39 @@ class ShannonLoader(firmwire.loader.Loader):
 
             self.create_peripheral(MarconiPeripheral, 0xC1800000, 0x5000, name="marconi")
             self.create_peripheral(CyclicBitPeripheral, 0xC2000000, 0x1000, name="marconi2")
-        elif self.modem_soc.name in ("S5123", ):
+        elif self.modem_soc.name in ("S5123"):
             self.create_mc_timer(0x840f0000, 0x1000)
             self.create_peripheral(UARTPeripheral, 0x84010000, 0x1000, name="uart2")
             self.create_peripheral(Unknown2Peripheral, 0x81020000, 0x1000, name="unk_per8")
             self.create_peripheral(CyclicBitPeripheral, 0x14500000, 0x5000, name="marconi")
             self.create_peripheral(CyclicBitPeripheral, 0x14420000, 0x1000, name="marconi2")
+        elif self.modem_soc.name in ("S5123AP"):
+            
+            # Marconi Peripherals appear to be the same offset from the clk base between S5123 and S5123AP:G991BXXSIHYK1
+            """
+                    40c35e3e 08 4b           ldr        r3=>DAT_8a100000,[DAT_40c35e60]                  = ??
+                                                                                             = 8A100000h
+            """
+            self.create_peripheral(CyclicBitPeripheral, 0x8a100000, 0x5000, name="marconi")
+            self.create_peripheral(CyclicBitPeripheral, 0x8a020000, 0x1000, name="marconi2")
+
+            self.create_timer(self.modem_soc.TIMER_BASE + 0x000, 0x100, "tim0", 32, freq=1000, gic_model=1)
+            self.create_timer(self.modem_soc.TIMER_BASE + 0x100, 0x100, "tim1", 33, freq=1000, gic_model=1)
+            self.create_timer(self.modem_soc.TIMER_BASE + 0x200, 0x100, "tim2", 34, freq=6000000, gic_model=1)
+            self.create_timer(self.modem_soc.TIMER_BASE + 0x300, 0x100, "tim3", 35, freq=6000000, gic_model=1)
+            self.create_timer(self.modem_soc.TIMER_BASE + 0x400, 0x100, "tim4", 36, freq=6000000, gic_model=1)
+            self.create_timer(self.modem_soc.TIMER_BASE + 0x500, 0x100, "tim5", 37, freq=6000000, gic_model=1)
+            self.create_timer(self.modem_soc.TIMER_BASE + 0x600, 0x100, "tim6", 38, gic_model=1)
+            self.create_timer(self.modem_soc.TIMER_BASE + 0x700, 0x100, "tim7", 39, gic_model=1)
+
+            self.create_peripheral(nr_UARTPeripheral, 0x84000000, 0x1000, name="boot_uart")
+            self.create_peripheral(nr_UARTPeripheral, 0x84010000, 0x1000, name='boot_uart_2')
+
+            self.create_peripheral(McTimerPeripheral, 0x840f0000, 0x1000, name="mc_timer") # pass through 0x840f024c : consolidated to mc timer
+            self.create_peripheral(SysCfgPeripheral, 0x82000000, 0x1000, name="SYSCFG")
+
+
+            self.create_peripheral(Unknown12Peripheral, 0x8f910000, 0x1000, name="unk_per12") # pass through 0x8f910000
 
         if self.modem_file.has_section("NV"):
             nv = self.modem_file.get_section("NV")
