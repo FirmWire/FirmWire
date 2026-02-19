@@ -20,6 +20,16 @@ class MMUEntry(MemEntry):
     def get_rwx_str(self):
         return self.prot
 
+    @classmethod
+    def unpack(cls, slot, array):
+        num_sections, virt_addr, phys_addr, flags = struct.unpack("<IIII", array)
+
+        if num_sections == 0:
+            return None
+
+        size = num_sections * 0x100000
+        return cls(slot, phys_addr, size, flags)
+
     def __repr__(self):
         return "<MMUEntry [{:08x}, {:08x}] id={} perm={}>".format(
             self.get_start(), self.get_end(), self.slot, self.prot
@@ -37,7 +47,7 @@ struct MMUEntry2 {
 	uint32_t flags;
 };
 """
-class MMUEntry_2(MemEntry):
+class MMUEntry2(MemEntry):
     def __init__(self, slot, base, size, flags):
         super().__init__(base, size, flags, slot)
         self.prot = extract_prot_from_flags(flags)
@@ -48,6 +58,16 @@ class MMUEntry_2(MemEntry):
 
     def get_rwx_str(self):
         return self.prot
+
+    @classmethod
+    def unpack(cls, slot, array):
+        virt_addr, phys_start, phys_end, flags = struct.unpack("<IIII", array)
+        size = phys_end - phys_start
+
+        if size == 0:
+            return None
+
+        return cls(slot, phys_start, size, flags)
 
     def __repr__(self):
         return "<MMUEntry_2 [{:08x}, {:08x}] id={} perm={}>".format(
@@ -68,7 +88,7 @@ def extract_prot_from_flags(flags):
     return prot
 
 
-def parse_mmu_table(modem_main, address):
+def parse_mmu_table(modem_main, address, entry_cls):
     entries = []
     unsafe_regions = []
 
@@ -78,17 +98,14 @@ def parse_mmu_table(modem_main, address):
     slot = 0
     while True:
         array = data[address: address + 0x10]
-        num_sections, virt_addr, phys_addr, flags = struct.unpack("<IIII", array)
-        size = num_sections * 0x100000
-        prot = extract_prot_from_flags(flags)
-
-        if num_sections == 0:
+        entry = entry_cls.unpack(slot, array)
+        
+        if entry is None:
             break
 
-        if prot == "rwx":
-            unsafe_regions.append((phys_addr, phys_addr + size))
+        if entry.get_rwx_str() == "rwx":
+            unsafe_regions.append((entry.get_start(), entry.get_end()))
 
-        entry = MMUEntry(slot, phys_addr, size, flags)
         entries += [entry]
 
         address += 0x10
@@ -96,32 +113,32 @@ def parse_mmu_table(modem_main, address):
 
     return entries, unsafe_regions
 
-def parse_mmu_table_2(modem_main, address):
-    entries = []
-    unsafe_regions = []
+# def parse_mmu_table_2(modem_main, address):
+#     entries = []
+#     unsafe_regions = []
 
-    data = modem_main.data
-    address -= modem_main.load_address
+#     data = modem_main.data
+#     address -= modem_main.load_address
     
-    slot = 0
-    while True:
-        array = data[address: address + 0x10]
-        virt_addr, phys_start, phys_end, flags = struct.unpack("<IIII", array) # little endian unpacking
-        size = phys_end - phys_start
-        prot = extract_prot_from_flags(flags)
+#     slot = 0
+#     while True:
+#         array = data[address: address + 0x10]
+#         virt_addr, phys_start, phys_end, flags = struct.unpack("<IIII", array) # little endian unpacking
+#         size = phys_end - phys_start
+#         prot = extract_prot_from_flags(flags)
 
-        # Similar logic to signal end of table
-        num_sections = size / 0x100000
-        if num_sections == 0 or size == 0:
-            break
+#         # Similar logic to signal end of table
+#         num_sections = size / 0x100000
+#         if num_sections == 0 or size == 0:
+#             break
 
-        if prot == "rwx":
-            unsafe_regions.append((phys_start, phys_start + size))
+#         if prot == "rwx":
+#             unsafe_regions.append((phys_start, phys_start + size))
 
-        entry = MMUEntry_2(slot, phys_start, size, flags)
-        entries += [entry]
+#         entry = MMUEntry_2(slot, phys_start, size, flags)
+#         entries += [entry]
 
-        address += 0x10
-        slot += 1
+#         address += 0x10
+#         slot += 1
 
-    return entries, unsafe_regions
+#     return entries, unsafe_regions

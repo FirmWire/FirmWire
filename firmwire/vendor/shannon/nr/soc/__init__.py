@@ -2,7 +2,6 @@ from ..hw import *
 from firmwire.hw.soc import SOCPeripheral, register_soc
 from firmwire.vendor.shannon.common.hw import GicModel
 from firmwire.vendor.shannon.common.soc import ShannonSOC
-from firmwire.vendor.shannon.nr.hw.sipc import SIPCPeripheral
 
 class S5123(ShannonSOC):
     peripherals = []
@@ -38,9 +37,7 @@ class S5123(ShannonSOC):
         ]
 
 class S5123AP(ShannonSOC):
-    peripherals = [
-        
-    ]
+    peripherals = []
 
     CHIP_ID = 0x50000000
     SIPC_BASE = 0x8F940000
@@ -53,7 +50,7 @@ class S5123AP(ShannonSOC):
     IPC_PERIPHERAL = SIPCPeripheral
 
     TIMER_BASE = SOC_BASE + 0x50000  # Timer IRQ already taken.
-    NUM_TIMERS = 6
+    NUM_TIMERS = 8
     iTINT0 = 32
 
     GIC_MODEL = GicModel.A15_MPCORE

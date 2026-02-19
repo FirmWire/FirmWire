@@ -846,9 +846,16 @@ r12: %08x     cpsr: %08x""" % (
                     },
                 ]
                 self.install_mem_hooks(new_mem_mappings)
+
+                uart_periph = self.peripheral_map["uart2"]
+                uart_periph.status = 0x10
+                boot_uart_periph = self.peripheral_map["boot_uart"]
+                boot_uart_periph.status = 0x10
+
             self.set_breakpoint(
                 self.symbol_table.lookup("boot_key_check").address, set_key
             )
+            
             # if self.modem_soc.name != "S5133AP":
             #     disable_list += ["SHM"]  # need to configure SBD
         elif self.modem_soc.name == "S5123":

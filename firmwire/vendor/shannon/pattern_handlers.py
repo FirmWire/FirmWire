@@ -329,38 +329,28 @@ def decode_thumb_bl_target(insn, insn_addr):
     else:
         imm32 = imm25
 
-    # In Thumb state, PC is instruction address + 4 (aligned to 4 bytes)
-    # pc = (insn_addr + 4) & ~0x3
-    pc = (insn_addr + 4) & ~0x1 # Alignment to 2 bytes possible in G991BXXSCGXF5
+    # In Thumb state, PC is instruction address + 4 (2-byte alignment)
+    pc = (insn_addr + 4) & ~0x1
 
     # Target address
     target = (pc + imm32) & 0xffffffff
     return target
 
 
-# Modified to accomidate lookup patterns parameter
-def find_pal_sleep(data, offset, lookup_patterns):
+def find_pal_sleep(data, offset):
     bp = BinaryPattern("pal_Sleep", offset=8)
+    bp.from_hex("4af22010 c0f20700 ?+ 44f640?? ?+ c0f24c?? 00?? 0128 ?+ ??46 ?+ ??46")  # G991B, oriole
 
-    for pattern in lookup_patterns:
-        found = False
-        bp.from_hex(pattern)
+    locs = bp.findall(data)
+    assert len(locs) == 1, f"Found more than one instance or failed to find any ({len(locs)})"
 
-        locs = bp.findall(data)
-        if(len(locs) != 1):
-            pass
-            # print(f"[Lookup pal_Sleep]: Found more than one instance or failed to find any ({pattern}, {len(locs)})")
-        else:
-            insn_addr = 0x40010000 + locs[0][0]
-            offset = locs[0][0]
-            insn = data[offset: offset + 4]
-            insn = struct.unpack("<I", insn)[0]
-            assert validate_t1_bl(insn), "Invalid instruction ({:#010x})".format(insn)
+    insn_addr = 0x40010000 + locs[0][0]
+    offset = locs[0][0]
+    insn = data[offset: offset + 4]
+    insn = struct.unpack("<I", insn)[0]
+    assert validate_t1_bl(insn), "Invalid instruction ({:#010x})".format(insn)
 
-            return decode_thumb_bl_target(insn, insn_addr)
-    
-    assert found == True, f"Found no matching patterns"
-    return None
+    return decode_thumb_bl_target(insn, insn_addr)
 
 
 def decode_movw(insn):
