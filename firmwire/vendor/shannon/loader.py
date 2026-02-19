@@ -267,7 +267,7 @@ class ShannonLoader(firmwire.loader.Loader):
             self.create_peripheral(SysCfgPeripheral, 0x82000000, 0x1000, name="SYSCFG")
             self.create_peripheral(CyclicBitPeripheral, 0x8a100000, 0x5000, name="marconi")
             self.create_peripheral(CyclicBitPeripheral, 0x8a020000, 0x1000, name="marconi2")
-            self.create_peripheral(Unknown12Peripheral, 0x8f910000, 0x1000, name="unk_per12") # pass through 0x8f910000
+            self.create_peripheral(Unknown12Peripheral, 0x8f910000, 0x1000, name="unk_per12")
             
 
         if self.modem_file.has_section("NV"):
