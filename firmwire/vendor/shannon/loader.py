@@ -135,7 +135,7 @@ class ShannonLoader(firmwire.loader.Loader):
         # MPU/MMU Memory Map
         #######################
 
-        if self.modem_soc.name in ["S5123","S5123AP"]:
+        if self.modem_soc.name in CORTEX_A_SOC:
             from firmwire.vendor.shannon.nr.mmu import MMUEntry, MMUEntry2
             modem_main = self.modem_file.get_section("MAIN")
             sym = self.symbol_table.lookup("main_mmu_table")
@@ -227,13 +227,13 @@ class ShannonLoader(firmwire.loader.Loader):
 
         for i in range(self.modem_soc.NUM_TIMERS):
             freq = 6000000
-            if i == 0 or i == 1:
+            if i in (0, 1):
                 freq = 1000
             self.create_timer(
                 self.modem_soc.TIMER_BASE + i * 0x100, 0x100,
                 "tim{}".format(i), self.modem_soc.iTINT0 + i, freq,
-                gic_model=1)
-                
+                gic_model=self.modem_soc.GIC_MODEL)
+
         self.create_peripheral(
             self.modem_soc.CLK_PERIPHERAL, self.modem_soc.SOC_CLK_BASE, 0xA000, name="SOC_CLK")
         self.create_peripheral(
@@ -255,13 +255,13 @@ class ShannonLoader(firmwire.loader.Loader):
 
             self.create_peripheral(MarconiPeripheral, 0xC1800000, 0x5000, name="marconi")
             self.create_peripheral(CyclicBitPeripheral, 0xC2000000, 0x1000, name="marconi2")
-        elif self.modem_soc.name in ("S5123"):
+        elif self.modem_soc.name in ("S5123", ):
             self.create_mc_timer(0x840f0000, 0x1000)
             self.create_peripheral(UARTPeripheral, 0x84010000, 0x1000, name="uart2")
             self.create_peripheral(Unknown2Peripheral, 0x81020000, 0x1000, name="unk_per8")
             self.create_peripheral(CyclicBitPeripheral, 0x14500000, 0x5000, name="marconi")
             self.create_peripheral(CyclicBitPeripheral, 0x14420000, 0x1000, name="marconi2")
-        elif self.modem_soc.name in ("S5123AP"):
+        elif self.modem_soc.name in ("S5123AP", ):
             self.create_mc_timer(0x840f0000, 0x1000)
             self.create_peripheral(UARTPeripheral, 0x84010000, 0x1000, name='uart2')
             self.create_peripheral(SysCfgPeripheral, 0x82000000, 0x1000, name="SYSCFG")

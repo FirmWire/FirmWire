@@ -112,33 +112,3 @@ def parse_mmu_table(modem_main, address, entry_cls):
         slot += 1
 
     return entries, unsafe_regions
-
-# def parse_mmu_table_2(modem_main, address):
-#     entries = []
-#     unsafe_regions = []
-
-#     data = modem_main.data
-#     address -= modem_main.load_address
-    
-#     slot = 0
-#     while True:
-#         array = data[address: address + 0x10]
-#         virt_addr, phys_start, phys_end, flags = struct.unpack("<IIII", array) # little endian unpacking
-#         size = phys_end - phys_start
-#         prot = extract_prot_from_flags(flags)
-
-#         # Similar logic to signal end of table
-#         num_sections = size / 0x100000
-#         if num_sections == 0 or size == 0:
-#             break
-
-#         if prot == "rwx":
-#             unsafe_regions.append((phys_start, phys_start + size))
-
-#         entry = MMUEntry_2(slot, phys_start, size, flags)
-#         entries += [entry]
-
-#         address += 0x10
-#         slot += 1
-
-#     return entries, unsafe_regions

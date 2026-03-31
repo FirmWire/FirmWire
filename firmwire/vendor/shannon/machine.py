@@ -814,8 +814,6 @@ r12: %08x     cpsr: %08x""" % (
 
         if self.modem_soc.name in ("S5000AP", "S5123AP", "S5133AP"):
             if self.modem_soc.name == "S5123AP":
-                # disable_list += ["BTL"]
-                # disable_list += ["SHM"]
                 self.set_breakpoint(
                     self.symbol_table.lookup("set_task_affinity").address, set_affinity)
 
@@ -855,9 +853,7 @@ r12: %08x     cpsr: %08x""" % (
             self.set_breakpoint(
                 self.symbol_table.lookup("boot_key_check").address, set_key
             )
-            
-            # if self.modem_soc.name != "S5133AP":
-            #     disable_list += ["SHM"]  # need to configure SBD
+
         elif self.modem_soc.name == "S5123":
             from firmwire.vendor.shannon.hooks import warm_boot_change, protect_write_access
             new_mappings = [
