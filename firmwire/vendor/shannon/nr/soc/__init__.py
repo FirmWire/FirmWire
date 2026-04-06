@@ -8,7 +8,7 @@ class S5123(ShannonSOC):
 
     CHIP_ID = 0x20000000
     SIPC_BASE = 0x28000000
-    SHM_BASE = 0x50000000
+    SHM_BASE = 0x20000000
     SHM_PERIPHERAL = SHMPeripheralCortexA
     SOC_BASE = 0x82020000
     SOC_PERIPHERAL = ShannonSOCPeripheralCortexA

@@ -371,6 +371,12 @@ def decode_movw(insn):
     return imm32
 
 
+def decode_movw_arm(insn):
+    imm12 = insn & 0x00000fff
+    imm4 = (insn >> 16) & 0x000f
+    return (imm4 << 12) | imm12
+
+
 def ror32(value, n):
     n &= 31
     return ((value >> n) | (value << (32 - n))) & 0xffffffff
@@ -439,6 +445,27 @@ def decode_mov_immediate(insn, insn_len):
         return decode_movw(insn)
     else:
         raise ValueError("not a MOV (immediate) instruction: {:x}".format(insn))
+
+
+def find_sym_event_group_list(data, offset):
+    bp = BinaryPattern("SYM_EVENT_GROUP_LIST")
+    bp.from_hex("30482de9 0040a0e1 00300fe1 80000cf1 78009fe5 0110a0e3 9f2fd0e1 010052e1 02f02003 912fc011 01005211 f9ffff0a 59f07ff5 201094e5 4d00a0e3 000051e3 0000000a 3088bde8 ???????? 0410a0e1 805003e2 ???????? ???????? 380094e5")
+
+    locs = bp.findall(data)
+    assert len(locs) == 1, f"Found more than one instance or failed to find any ({len(locs)})"
+
+    offset = locs[0][1] - 0xc
+    insn2 = data[offset: offset + 4]
+    insn2 = struct.unpack("<I", insn2)[0]
+    addr_t = decode_movw_arm(insn2)
+
+    offset -= 0xc
+    insn1 = data[offset: offset + 4]
+    insn1 = struct.unpack("<I", insn1)[0]
+    addr_w = decode_movw_arm(insn1)
+
+    addr = (addr_t << 16) | addr_w
+    return addr
 
 
 def find_rf_hwid(data, offset):

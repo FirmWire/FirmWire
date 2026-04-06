@@ -257,6 +257,11 @@ PATTERNS_CORTEX_A = {
     },
     "SYM_QUEUE_LIST": {"lookup": handlers.find_queue_table},             # G991B, oriole
     "SYM_CUR_TASK_PTR": {"lookup": handlers.find_current_task_ptr_a},    # G991B, oriole
+    # Find function OS_Create_Event_Group which calls a function to inject the pointer of pal_event_group into a fixed pointer
+    "SYM_EVENT_GROUP_LIST": {
+        "lookup": handlers.find_sym_event_group_list,
+        "soc_match": ["S5123"],
+    },
     "SYM_TASK_LIST": {                                                   # G991B, oriole
         "lookup": handlers.find_task_table,
         "post_lookup": handlers.fixup_set_task_layout,
