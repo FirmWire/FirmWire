@@ -736,6 +736,7 @@ class FirmWireEmu(ABC):
 
         if load_at == "SNAPSHOT_RESTORE":
             self._mem_dump_config["load_after_snapshot"] = True
+            self.load_memory_dump()
             return
             
         if isinstance(load_at, str):
