@@ -641,7 +641,8 @@ class MT6878Machine(FirmWireEmu):
                     return
 
                 ra = self.qemu.pypanda.arch.get_reg(env, "RA")
-                obj = {"addr": addr, "length": size, "pc": pc, "ra": ra, "fn": get_containing_fn(pc), "fn_ra": get_containing_fn(ra)}
+                sp = self.qemu.pypanda.arch.get_reg(env, "SP")
+                obj = {"addr": addr, "length": size, "pc": pc, "ra": ra, "sp": sp, "fn": get_containing_fn(pc), "fn_ra": get_containing_fn(ra)}
                 self.function_memory_access['w'].append(obj)
                 sys.stdout.write(f"\nMEM_WRITE: {json.dumps(obj)}\n")
                 sys.stdout.flush()
@@ -652,7 +653,8 @@ class MT6878Machine(FirmWireEmu):
                     return
 
                 ra = self.qemu.pypanda.arch.get_reg(env, "RA")
-                obj = {"addr": addr, "length": size, "pc": pc, "ra": ra, "fn": get_containing_fn(pc), "fn_ra": get_containing_fn(ra)}
+                sp = self.qemu.pypanda.arch.get_reg(env, "SP")
+                obj = {"addr": addr, "length": size, "pc": pc, "ra": ra, "sp": sp, "fn": get_containing_fn(pc), "fn_ra": get_containing_fn(ra)}
                 self.function_memory_access['r'].append(obj)
                 sys.stdout.write(f"\nMEM_READ: {json.dumps(obj)}\n")
                 sys.stdout.flush()
