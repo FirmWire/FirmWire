@@ -111,9 +111,6 @@ class FirmWireGuestLogger:
 
             for vibe_check in self._banned_log_patterns:
                 if vibe_check.search(this_msg):
-                    if address is not None:
-                        self._banned_addresses.add(address)
-
                     if log_hash is not None:
                         self._banned_log_hashes.add(log_hash)
 
