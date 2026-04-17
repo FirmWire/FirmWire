@@ -329,6 +329,13 @@ def main() -> int:
 
     log.info("Machine initialization time took %.2f seconds", machine.time_running())
 
+    if args.mem_dump:
+        machine.configure_memory_dump(
+            dump_file=args.mem_dump,
+            load_at=args.load_mem_dump_at,
+            addrs=args.mem_dump_addrs,
+        )
+
     if args.restore_snapshot:
         machine.restore_snapshot(args.restore_snapshot)
 
@@ -372,13 +379,6 @@ def main() -> int:
 
     if args.gsmtap:
         machine.set_gsmtap_ip(args.gsmtap)
-
-    if args.mem_dump:
-        machine.configure_memory_dump(
-            dump_file=args.mem_dump,
-            load_at=args.load_mem_dump_at,
-            addrs=args.mem_dump_addrs,
-        )
 
     if loader.NAME == "shannon":
         # With shannon we can inject tasks overwriting the old one, even after snapshot restores for quick dev
