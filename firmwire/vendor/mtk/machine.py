@@ -771,6 +771,7 @@ class MT6878Machine(FirmWireEmu):
         # This is some whacky stuff to make restores work. I
         # I suspect that our MTK machine introduced a bug into panda and some global state isn't being captured
 
+        self.qemu.pypanda.disable_memcb()
         log.warning("MTK snapshot quirk: First restore...")
         super().restore_snapshot(snapshot_name)
 
@@ -783,6 +784,7 @@ class MT6878Machine(FirmWireEmu):
 
         log.warning("MTK snapshot quirk: Stopping target...")
         self.qemu.stop(blocking=True)
+        self.qemu.pypanda.enable_memcb()
 
         log.warning("MTK snapshot quirk: Second restore...")
         super().restore_snapshot(snapshot_name)
