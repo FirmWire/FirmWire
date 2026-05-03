@@ -227,8 +227,11 @@ class ShannonLoader(firmwire.loader.Loader):
 
         for i in range(self.modem_soc.NUM_TIMERS):
             freq = 6000000
-            if i in (0, 1):
-                freq = 1000
+            if i == 0:
+                freq = 100000
+            if i in (0, 1) and self.modem_soc.name == "S5123AP":
+                # Both timers should run at the same frequency.
+                freq = 100000
             self.create_timer(
                 self.modem_soc.TIMER_BASE + i * 0x100, 0x100,
                 "tim{}".format(i), self.modem_soc.iTINT0 + i, freq,
@@ -247,6 +250,7 @@ class ShannonLoader(firmwire.loader.Loader):
         if self.modem_soc.name in CORTEX_R_SOC:
             self.create_peripheral(ShannonTCU, 0x8200F000, 0x100, name="TCU")
 
+            self.create_peripheral(Unknown2Peripheral, 0x81002000, 0x1000, name="unk_per8")
             self.create_peripheral(LoggingPeripheral, 0x8F900000, 0x1000, name="unk_per10")
             self.create_peripheral(LoggingPeripheral, 0x8FC30000, 0x1000, name="usi1")
             self.create_peripheral(LoggingPeripheral, 0x8FC22000, 0x1000, name="usi2")

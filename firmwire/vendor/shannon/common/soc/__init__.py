@@ -5,9 +5,6 @@ from firmwire.hw.soc import FirmWireSOC
 class ShannonSOC(FirmWireSOC):
     # Start in BOOT (can be overwritten)
     ENTRY_ADDRESS = 0x0
-    NUM_TIMERS = 6
-    iTINT0 = 34
-    GIC_MODEL = GicModel.A9_MPCORE
 
     # Whether the OSI for the TaskStruct should use the Moto or Samsung version
 

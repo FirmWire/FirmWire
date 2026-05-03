@@ -849,6 +849,8 @@ r12: %08x     cpsr: %08x""" % (
                 uart_periph.status = 0x10
                 boot_uart_periph = self.peripheral_map["boot_uart"]
                 boot_uart_periph.status = 0x10
+            if self.modem_soc.name == "S5000AP":
+                disable_list += ["SHM"]  # need to configure SBD
 
             self.set_breakpoint(
                 self.symbol_table.lookup("boot_key_check").address, set_key
