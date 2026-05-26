@@ -270,9 +270,22 @@ def find_queue_table(data, offset):
 
     ptr = rez[0][0] # first reference for both
 
-    # AdcTask's queue is the third item in the list (might not be stable)
-    # Stable for S5123AP:G991BXXSIHYK1
-    ptr -= QUEUE_STRUCT_SIZE * 2
+    # Walk backwards from AdcTask to find the true start of the queue list.
+    # Validate each candidate entry: name pointer targets printable ASCII,
+    # and the 3 padding bytes after qtype (offsets 9-11) are zero.
+    while ptr >= QUEUE_STRUCT_SIZE:
+        candidate = ptr - QUEUE_STRUCT_SIZE
+        name_ptr = struct.unpack_from("<I", data, candidate)[0]
+        name_off = name_ptr - offset
+        pad = data[candidate + 9 : candidate + 12]
+        if (
+            0 <= name_off < len(data)
+            and 0x20 <= data[name_off] < 0x7F
+            and pad == b"\x00\x00\x00"
+        ):
+            ptr = candidate
+        else:
+            break
 
     return offset + ptr
 
