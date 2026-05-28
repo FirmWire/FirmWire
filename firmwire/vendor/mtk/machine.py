@@ -22,6 +22,7 @@ from firmwire.vendor.mtk.hooks import (
     msg_send_hook
 )
 from firmwire.vendor.mtk.mtk_task import MtkTask, TASK_STRUCT_SIZE
+from firmwire.vendor.mtk.mtkdb.memory_dump import MtkMemoryDump
 
 from firmwire.util.port import find_free_port
 from firmwire.emulator.firmwire import FirmWireEmu
@@ -412,15 +413,35 @@ class MT6878Machine(FirmWireEmu):
                 symbols["MML1_RF_Wait_us"] + 1,
                 # TODO: mutexes do not seem to be set up here
                 symbols["ccismc_submit_ior"] + 1,  # symbols['enqueue_gpd']+1
+                symbols["drv_idc_init"] + 1,
+                symbols["el1_idc_init"] + 1, # We need EL1 for LTE NAS, but EL1_IDC and EL1D partially fail to boot
+                symbols["el1c_init2"] + 1,
+                symbols["EL1D_TC_HW_Init"] + 1,
+                symbols["EL1D_TC_HW_Disable_All_IRQ"] + 1,
+                symbols["EL1D_RFCC_Init"] + 1,
+                symbols["EL1D_Main_Common_Init"] + 1,
+                symbols["emacdl_init"] + 1,
+                symbols["el1_chmgm_errc_cfg_req_in_idle"] + 1,
+                symbols["errc_com_start_timer"] + 1, # Disable a bunch of timers which do not work
+                symbols["errc_com_stop_timer"] + 1,
+                symbols["CEmmTimerMng::startTimer"] + 1,
+                symbols["CEmmTimerMng::stopTimer"] + 1,
+                symbols["sms_start_timer"] + 1,
+                symbols["sms_stop_timer"] + 1,
+                symbols["smsal_start_timer"] + 1,
+                symbols["smsal_stop_timer"] + 1 ,
+                symbols["ssipc_simslot_check"] + 1, # SMS
+                symbols["ss_log_msg_tag"] + 1, # SMS
+                symbols["epdcp_ulproc_dcch_data_req_hndlr"] + 1,
+                symbols["_ulproc_send_dcch_data_cnf"] + 1, # prevent problems due to missing RLC ACKs
             ]
         )
 
-        def skip_function_bp(x):
-            ra = qemu.read_register("ra")
-            qemu.write_register("pc", ra)
-
         for addr in skip_functions:
-            self.set_breakpoint(addr & ~1, skip_function_bp, continue_after=True)
+            # Performance optimization: Skip via writing a "ret" instruction to memory
+            # Rather than using a breakpoint
+            ret = b"\xa0\xe8\x00\x65" # JRC ra
+            self.panda.physical_memory_write(addr & ~1, ret)
 
         def exit_hook(self, env, tb, hook):
             print(
@@ -569,11 +590,13 @@ class MT6878Machine(FirmWireEmu):
             print("*** skipping assert")
             qemu.write_register("pc", symbols["errc_evth_inevt_handler_end"] + 1)
 
-        self.set_breakpoint(
-            symbols["errc_evth_inevt_handler_assert"],
-            skip_assert_bp,
-            continue_after=True,
-        )
+        # Un-comment the following block to skip asserts that occur when fuzzing without restoring a memory dump
+        # NOTE: This means you only fuzz early stage processing (e.g. ASN.1 parsing)
+        # self.set_breakpoint(
+        #     symbols["errc_evth_inevt_handler_assert"],
+        #     skip_assert_bp,
+        #     continue_after=True,
+        # )
 
         if not self._fuzzing:
             self.add_panda_hook(symbols["dhl_internal_trace_impl"], dhl_trace_hook)
@@ -603,6 +626,39 @@ class MT6878Machine(FirmWireEmu):
             self.add_panda_hook(0x90519d34, geminisusp_hook)"""
 
         fcntl.fcntl(sys.stdout.fileno(), fcntl.F_SETFL, 0)  # remove non-block
+
+        if str(os.environ.get("ENABLE_MEMORY_TRACING", 0)) == '1':
+            sorted_function_starts = sorted(self.symbols.values(), reverse=True)
+            self.function_memory_access = {'r': [], 'w': []}
+
+            def get_containing_fn(addr):
+                return next((curr_fn_addr for curr_fn_addr in sorted_function_starts if curr_fn_addr <= addr), list(sorted_function_starts)[0])
+
+
+            @qemu.pypanda.cb_phys_mem_before_write
+            def mem_before_write(env, pc, addr, size, buf):
+                if not self.memory_tracing_enabled:
+                    return
+
+                ra = self.qemu.pypanda.arch.get_reg(env, "RA")
+                sp = self.qemu.pypanda.arch.get_reg(env, "SP")
+                obj = {"addr": addr, "length": size, "pc": pc, "ra": ra, "sp": sp, "fn": get_containing_fn(pc), "fn_ra": get_containing_fn(ra)}
+                self.function_memory_access['w'].append(obj)
+                sys.stdout.write(f"\nMEM_WRITE: {json.dumps(obj)}\n")
+                sys.stdout.flush()
+
+            @qemu.pypanda.cb_phys_mem_before_read
+            def mem_before_read_hook(env, pc, addr, size):
+                if not self.memory_tracing_enabled:
+                    return
+
+                ra = self.qemu.pypanda.arch.get_reg(env, "RA")
+                sp = self.qemu.pypanda.arch.get_reg(env, "SP")
+                obj = {"addr": addr, "length": size, "pc": pc, "ra": ra, "sp": sp, "fn": get_containing_fn(pc), "fn_ra": get_containing_fn(ra)}
+                self.function_memory_access['r'].append(obj)
+                sys.stdout.write(f"\nMEM_READ: {json.dumps(obj)}\n")
+                sys.stdout.flush()
+
 
         # @qemu.pypanda.ppp("callstack_instr", "on_call")
         # def on_call(cpu, func):
@@ -715,6 +771,7 @@ class MT6878Machine(FirmWireEmu):
         # This is some whacky stuff to make restores work. I
         # I suspect that our MTK machine introduced a bug into panda and some global state isn't being captured
 
+        self.qemu.pypanda.disable_memcb()
         log.warning("MTK snapshot quirk: First restore...")
         super().restore_snapshot(snapshot_name)
 
@@ -727,6 +784,7 @@ class MT6878Machine(FirmWireEmu):
 
         log.warning("MTK snapshot quirk: Stopping target...")
         self.qemu.stop(blocking=True)
+        self.qemu.pypanda.enable_memcb()
 
         log.warning("MTK snapshot quirk: Second restore...")
         super().restore_snapshot(snapshot_name)
@@ -814,3 +872,23 @@ class MT6878Machine(FirmWireEmu):
         )
 
         return task.address
+
+    def load_memory_dump(self):
+        self._mtk_memory_dump = MtkMemoryDump(self.get_memory_dump_file_path())
+
+
+    def restore_memory_dump(self):
+        log.info("Restoring memory dump")
+        count = 0
+        for (addr, size) in self.get_mem_dump_addrs():
+            buf = self._mtk_memory_dump.get(addr, size)
+            if buf is None:
+                continue
+
+            self.qemu.pypanda.physical_memory_write(addr, buf)
+            count += 1
+            if count % 500 == 0:
+                log.debug(f"Restored {count} chunks from memory dump...")
+        log.info(f"Memory dump recovery completed, restored {count} chunks")
+        self.memory_tracing_enabled = str(os.environ.get("ENABLE_MEMORY_TRACING", 0)) == '1'
+
