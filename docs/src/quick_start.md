@@ -47,5 +47,6 @@ You will need the ShannonLoader, which can be installed on to the custom Ghidra 
 ## Known Issues
 
 * MediaTek snapshotting is hacky. CCCI FSD has file system state that needs to be specially saved
+* MediaTek images require an nvdata dump from a real phone, passed over via the `--mtk-loader-nv_data` argument. It may work with an empty nvdata directory as well.
 * After snapshotting, segfaults in Panda may occur. Just restore from snapshot to resume
 * Ctrl+C during console mode doesn't work. Use Ctrl+\
