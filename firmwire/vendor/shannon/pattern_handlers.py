@@ -728,7 +728,7 @@ def find_msg_id_lte_pdcp_data_req(data, offset):
     
     # Not the cleanest pattern, but search for code that
     # prepares an LTE_PDCP_DATA_REQ message, using an `adr` 
-    # instruction
+    # or `ldr` instruction
 
     bp = BinaryPattern("msg_id_lte_pdcp_data_req")
     bp.from_str(b"LTE_PDCP_DATA_REQ\x00")
@@ -759,7 +759,6 @@ def find_msg_id_lte_pdcp_data_req(data, offset):
         if res is None:
             break
         
-        # adr instruction
         ins = int.from_bytes(data[res[0]:res[0]+2], "little")
         
         target = 0
