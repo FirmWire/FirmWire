@@ -765,11 +765,11 @@ def find_msg_id_lte_pdcp_data_req(data, offset):
 
         if((ins >> 11) == 0x14):
             # adr
-            target = res[0] + 4 + 4 * (ins & 0xFF) + res[0]
+            target = res[0] + 4 + 4 * (ins & 0xFF)
         
         elif((ins >> 11) == 0x9):
             # pc relative ldr
-            target = ((res[0] + 4) & ~3) + 4*(ins & 0xFF)
+            target = res[0] + 4 + 4 * (ins & 0xFF)
         
         
         if(target in llocs):
