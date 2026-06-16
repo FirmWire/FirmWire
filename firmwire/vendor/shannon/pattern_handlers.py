@@ -778,7 +778,7 @@ def find_msg_id_lte_pdcp_data_req(data, offset):
             # +0x8  is the message id == ??20 ??60
             # Probably 0xc2
             val = int.from_bytes(data[res[0]-0x4:res[0]-0x4+0x2], "little") & 0xFF
-            log.info(f"Resolved LTE_PDCP_DATA_REQ to : {val:#x}")
+            log.info(f"Resolved MSG_ID_LTE_PDCP_DATA_REQ to : {val:#x}")
             return val
         
         npos = res[1]
