@@ -57,10 +57,15 @@ ENV PATH="/opt/firmwire_venv/bin:$PATH"
   
 # Install panda, and deps for Shannon Panda
 WORKDIR /firmwire_deps
+# Pin panda to the exact commit verified to build against this FirmWire release.
+# Upstream panda 'main' is a from-source QEMU fork and is the main moving target
+# for build reproducibility; pinning avoids surprise breakage. Bump to re-pin.
+ARG PANDA_COMMIT=03098aef47dafbd8fdc62fb3ff68db47a3ca8cab
 RUN rm -rf panda \
   && git clone --depth=1 https://github.com/FirmWire/panda.git \
   && cd panda \
-  && git checkout main \
+  && git fetch --depth=1 origin ${PANDA_COMMIT} \
+  && git checkout ${PANDA_COMMIT} \
   && rm -rf build \
   && mkdir build \
   && cd build \
