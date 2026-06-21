@@ -711,3 +711,74 @@ def get_dsp_sync1(self, sym, data, offset):
     self.symbol_table.add(sym.name, sync_word)
     log.info(f"Retrieved sync word 1: {sync_word}")
     return True
+
+
+def find_msg_id_lte_pdcp_data_ind(self, sym, data, offset):
+    main_toc = self.modem_file.get_section("MAIN")
+    val = int.from_bytes(
+        main_toc.data[sym.address - main_toc.load_address: sym.address - main_toc.load_address + 4], "little"
+    )
+    val = val & 0xFF
+    self.symbol_table.remove(sym.name)
+    self.symbol_table.add(sym.name, val)
+    log.info(f"Resolved MSG_ID_LTE_PDCP_DATA_IND to : {val:#x}")
+    return True
+
+def find_msg_id_lte_pdcp_data_req(data, offset):
+    
+    # Not the cleanest pattern, but search for code that
+    # prepares an LTE_PDCP_DATA_REQ message, using an `adr` 
+    # or `ldr` instruction
+
+    bp = BinaryPattern("msg_id_lte_pdcp_data_req")
+    bp.from_str(b"LTE_PDCP_DATA_REQ\x00")
+
+    locs = []
+    llocs = []
+    npos = 0
+
+
+    # LTE_PDCP_DATA_REQ strings
+    locs = [l[0] for l in bp.findall(data)]
+    llocs += locs
+
+    # pointers to string
+
+    for l in locs:
+        bp_x = BinaryPattern("xref")
+        bp_x.from_str(struct.pack("I", l+offset))
+        rez = bp_x.findall(data, maxresults=10)
+        for r in rez:
+            llocs.append(r[0])
+
+    bp_code = BinaryPattern("bp_code", offset=0x4)
+    bp_code.from_hex("??20 ??60 ???? ??61")
+
+    while True:
+        res = bp_code.find(data, pos=npos)
+        if res is None:
+            break
+        
+        ins = int.from_bytes(data[res[0]:res[0]+2], "little")
+        
+        target = 0
+
+        if((ins >> 11) == 0x14):
+            # adr
+            target = res[0] + 4 + 4 * (ins & 0xFF)
+        
+        elif((ins >> 11) == 0x9):
+            # pc relative ldr
+            target = res[0] + 4 + 4 * (ins & 0xFF)
+        
+        
+        if(target in llocs):
+            # +0x18 is the type: LTE_PDCP_DATA_REQ
+            # +0x8  is the message id == ??20 ??60
+            # Probably 0xc2
+            val = int.from_bytes(data[res[0]-0x4:res[0]-0x4+0x2], "little") & 0xFF
+            log.info(f"Resolved MSG_ID_LTE_PDCP_DATA_REQ to : {val:#x}")
+            return val
+        
+        npos = res[1]
+    

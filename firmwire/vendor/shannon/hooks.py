@@ -12,6 +12,14 @@ from .queue import QUEUE_STRUCT_SIZE, QUEUE_NAME_PTR_OFFSET
 
 from firmwire.util.panda import read_cstring_panda
 
+from firmwire.util.gsmtap import (
+    gsmtap_type,
+    gsmtap_lte_rrc_types,
+    send_gsmtap_packet,
+    create_gsmtap_header,
+)
+
+
 log = logging.getLogger(__name__)
 NUM2FMT = {1: "B", 2: "H", 4: "I", 8: "Q"}
 
@@ -476,6 +484,24 @@ def pal_MsgSendTo(self, cpustate, tb, hook):
             qid,
             itemType,
         )
+    
+    msg_id = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(msgAddr, 4), "little"
+    )
+
+    msgGroup = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(msgAddr+6, 2), "little"
+    )
+
+    msg_id_lte_pdcp_data_ind = self.symbol_table.lookup("MSG_ID_LTE_PDCP_DATA_IND").address
+    msg_id_lte_pdcp_data_req = self.symbol_table.lookup("MSG_ID_LTE_PDCP_DATA_REQ").address
+
+    if(msg_id == msg_id_lte_pdcp_data_ind):
+        dump_inbound_rrc_data(self, cpustate, msgAddr)
+      
+   
+    elif(msg_id == msg_id_lte_pdcp_data_req):
+        dump_outbound_rrc_data(self, cpustate, msgAddr)
 
 
 def pal_QueueCreate(self, cpustate, tb, hook):
@@ -527,6 +553,91 @@ def protect_write_access(self, cpustate, memory_access_desc, label=None, const_v
         f"Protected write access: PC({cpustate.panda_guest_pc:#010x}) Addr({addr:#010x})" +
         (f" ({label}+{offset:#x})" if label else "") + f" Value({value:#x})"
     )
+
+### GSM-TAP features ###
+
+# Print uplink RRC data
+def dump_outbound_rrc_data(self, cpustate, msg_struct_addr):
+    msg_id = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(msg_struct_addr, 4), "little"
+    )
+    
+    msg_id_lte_pdcp_data_req = self.symbol_table.lookup("MSG_ID_LTE_PDCP_DATA_REQ").address
+
+    assert (
+        msg_id == msg_id_lte_pdcp_data_req
+    ), f"Tried to extract a data buffer from wrong msg type (is: {msg_id}, expected: MSG_ID_LTE_PDCP_DATA_REQ ({msg_id_lte_pdcp_data_req})"
+  
+    data_ptr = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(msg_struct_addr + 12, 4), "little"
+    )
+    data_len = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(msg_struct_addr + 8, 4), "little"
+    )
+    log_emit(self, cpustate, "\033[92mSending outbound RRC->PDCP DCCH data at %04X for %02X bytes\033[0m",
+        data_ptr,
+        data_len)
+   
+    gsmtap_hdr = create_gsmtap_header(
+        payload_type=gsmtap_type.LTE_RRC, sub_type=gsmtap_lte_rrc_types.UL_DCCH
+    )
+    send_gsmtap_packet(
+        self, gsmtap_hdr, self.qemu.pypanda.physical_memory_read(data_ptr, data_len)
+)
+
+# Print Downlink RRC data
+def dump_inbound_rrc_data(self, cpustate, msg_struct_addr):
+
+    msg_id = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(msg_struct_addr, 2), "little"
+    )
+    
+    msg_id_lte_pdcp_data_ind = self.symbol_table.lookup("MSG_ID_LTE_PDCP_DATA_IND").address
+
+    assert (
+        msg_id == msg_id_lte_pdcp_data_ind
+    ), f"Tried to extract a data buffer from wong ilm msg type (is: ${msg_id}, expected: MSG_ID_LTE_PDCP_DATA_IND ({msg_id_lte_pdcp_data_ind}))"
+    
+
+    data_ptr = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(msg_struct_addr + 16, 4), "little"
+    )
+    data_len = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(msg_struct_addr + 12, 4), "little"
+    )
+    
+    rb_id = int.from_bytes(
+        self.qemu.pypanda.physical_memory_read(msg_struct_addr + 8, 4), 'little')
+    
+    if(rb_id == 0x2):
+        log_emit(self, cpustate,
+            "\033[92mReceived inbound RRC->PDCP DCCH data at %04X for %02X bytes\033[0m",
+            data_ptr,
+            data_len
+        )
+
+        gsmtap_hdr = create_gsmtap_header(
+            payload_type=gsmtap_type.LTE_RRC, sub_type=gsmtap_lte_rrc_types.DL_DCCH
+        )
+        send_gsmtap_packet(
+            self, gsmtap_hdr, self.qemu.pypanda.physical_memory_read(data_ptr, data_len)
+        )
+    
+    elif(rb_id == 0x12):
+        
+        log_emit(self, cpustate,
+            "\033[92mReceived inbound RRC->PDCP BCCH data at %04X for %02X bytes\033[0m",
+            data_ptr,
+            data_len
+        )
+
+        gsmtap_hdr = create_gsmtap_header(
+            payload_type=gsmtap_type.LTE_RRC, sub_type=gsmtap_lte_rrc_types.BCCH_DL_SCH
+        )
+        send_gsmtap_packet(
+            self, gsmtap_hdr, self.qemu.pypanda.physical_memory_read(data_ptr, data_len)
+        )
+
 
 ###############################
 

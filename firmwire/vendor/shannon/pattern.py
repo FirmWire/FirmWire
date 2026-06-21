@@ -154,6 +154,20 @@ PATTERNS_CORTEX_R = {
         "post_lookup": handlers.get_dsp_sync1,
         "required": False,
     },
+    # Look for "LTE_PDCP_DATA_IND malloc fail"
+    "MSG_ID_LTE_PDCP_DATA_IND" : {
+        "pattern": [
+            "0420 ???????? ???? ???????? 0cf0???? ??90 ???? ??21 0160",
+            "???????? 0420 ???????? 0cf0???? ??90 0028 ???? ??21 0160"
+        ],
+        "offset": 20,
+        "post_lookup": handlers.find_msg_id_lte_pdcp_data_ind,
+        "required": False
+    },
+    "MSG_ID_LTE_PDCP_DATA_REQ" : {
+        "lookup": handlers.find_msg_id_lte_pdcp_data_req,
+        "required": False
+    },
 }
 
 PATTERNS_CORTEX_A = {
