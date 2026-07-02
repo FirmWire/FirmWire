@@ -45,6 +45,7 @@ class ShannonMachine(FirmWireEmu, ShannonOSI):
         self.ports = {}
         self._fuzzing = False
         self.packet_log = None
+        self._gsmtap_ip = None
 
     def pal_msg_logging_enable(self, log_file):
         if log_file == "-":
@@ -1012,3 +1013,9 @@ r12: %08x     cpsr: %08x""" % (
                 return False
 
         return True
+
+    def set_gsmtap_ip(self, ip):
+        self._gsmtap_ip = ip
+
+    def get_gsmtap_ip(self):
+        return self._gsmtap_ip
