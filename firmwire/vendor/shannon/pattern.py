@@ -274,7 +274,7 @@ PATTERNS_CORTEX_A = {
     # Find function OS_Create_Event_Group which calls a function to inject the pointer of pal_event_group into a fixed pointer
     "SYM_EVENT_GROUP_LIST": {
         "lookup": handlers.find_sym_event_group_list,
-        "soc_match": ["S5123"],
+        "soc_match": ["S5123", "S5123AP"],
     },
     "SYM_TASK_LIST": {                                                   # G991B, oriole
         "lookup": handlers.find_task_table,
