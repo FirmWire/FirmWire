@@ -77,6 +77,8 @@ def get_args():
         "--gsmtap", type=str, help="Stream packets from inside the baseband to this IP on port 4729 (gsmtap)"
     )
 
+    parser.add_argument_group
+
     fuzzopts = parser.add_argument_group("fuzzing options")
 
     fuzzopts.add_argument(
@@ -178,6 +180,28 @@ def get_args():
         help="Enable *full* coverage collection (logs every executed basic block)",
     )
 
+    # Memory dump options (must be all set or none)
+    mem_group = parser.add_argument_group("memory dump options", description=
+                                          "Options to load a memory dump into the emulated machine at a specific point. All three options must be provided to enable this feature.")
+    mem_group.add_argument(
+        "--mem-dump",
+        type=str,
+        default=None,
+        help="Path to memory dump file to load",
+    )
+    mem_group.add_argument(
+        "--load-mem-dump-at",
+        type=str,
+        default=None,
+        help="PC Address (hex) or symbol name when to load the memory dump",
+    )
+    mem_group.add_argument(
+        "--mem-dump-addrs",
+        type=str,
+        default=None,
+        help="Path to file listing addresses and lengths (one per line: <addr>,<len>)",
+    )
+
     ### Parse
     args = parser.parse_args()
 
@@ -191,6 +215,59 @@ def get_args():
 
     for name, validator in loader_specific_args.items():
         loader_specific_args[name] = validator.extract_relevant_params(args)
+
+    # Validate memory-dump options: either all provided or none
+    if args.mem_dump is not None or args.load_mem_dump_at is not None or args.mem_dump_addrs is not None:
+        if args.mem_dump is None or args.load_mem_dump_at is None or args.mem_dump_addrs is None:
+            parser.error(
+                "Options --mem-dump, --load-mem-dump-at and --mem-dump-addrs must be all set or none set"
+            )
+
+    # If provided, validate --mem-dump exists
+    if args.mem_dump is not None:
+        if not os.path.isfile(args.mem_dump):
+            parser.error(f"--mem-dump file does not exist: {args.mem_dump}")
+
+        # Parse the mem-dump-addrs file into a list of (addr, length) tuples
+        addrs_list = []
+        try:
+            with open(args.mem_dump_addrs, "r") as f:
+                for lineno, line in enumerate(f, start=1):
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    parts = [p.strip() for p in line.split(",")]
+                    if len(parts) != 2:
+                        parser.error(
+                            f"Invalid line in --mem-dump-addrs at {args.mem_dump_addrs}:{lineno}: '{line}' (expected 'addr,length')"
+                        )
+                    try:
+                        addr = int(parts[0], 0)
+                        length = int(parts[1], 0)
+                    except Exception as e:
+                        parser.error(
+                            f"Invalid numeric value in --mem-dump-addrs at {args.mem_dump_addrs}:{lineno}: {e}"
+                        )
+                    if length <= 0:
+                        parser.error(
+                            f"Length must be positive in --mem-dump-addrs at {args.mem_dump_addrs}:{lineno}"
+                        )
+                    addrs_list.append((addr, length))
+        except FileNotFoundError:
+            parser.error(f"--mem-dump-addrs file does not exist: {args.mem_dump_addrs}")
+        except Exception as e:
+            parser.error(f"Failed to read --mem-dump-addrs: {e}")
+
+        args.mem_dump_addrs = addrs_list
+
+        # Parse --load-mem-dump-at: try numeric parse, otherwise leave as symbol string
+        s = args.load_mem_dump_at
+        try:
+            args.load_mem_dump_at = int(s, 0)
+        except Exception:
+            # keep as symbol name (string)
+            pass
+
 
     return args, loader_specific_args, params
 
@@ -251,6 +328,13 @@ def main() -> int:
         return 1
 
     log.info("Machine initialization time took %.2f seconds", machine.time_running())
+
+    if args.mem_dump:
+        machine.configure_memory_dump(
+            dump_file=args.mem_dump,
+            load_at=args.load_mem_dump_at,
+            addrs=args.mem_dump_addrs,
+        )
 
     if args.restore_snapshot:
         machine.restore_snapshot(args.restore_snapshot)

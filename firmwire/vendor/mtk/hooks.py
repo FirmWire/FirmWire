@@ -217,10 +217,11 @@ def msg_send_hook(self, env, tb, param3):
         task_name=self._current_task_name,
         address=ra,
     )
-    if msg_id == self.loader.msg_ids["MSG_ID_ERRC_EPDCP_DCCH_DATA_REQ"]:
-        gsmtap_uplink_errc_dcch_data(self, env, struct_addr)
-    elif msg_id == self.loader.msg_ids["MSG_ID_ERRC_EPDCP_DCCH_DATA_IND"]:
-        gsmtap_downlink_errc_dcch_data(self, env, struct_addr)
+    if self.get_gsmtap_ip() is not None:
+        if msg_id == self.loader.msg_ids["MSG_ID_ERRC_EPDCP_DCCH_DATA_REQ"]:
+            gsmtap_uplink_errc_dcch_data(self, env, struct_addr)
+        elif msg_id == self.loader.msg_ids["MSG_ID_ERRC_EPDCP_DCCH_DATA_IND"]:
+            gsmtap_downlink_errc_dcch_data(self, env, struct_addr)
 
 
 def gsmtap_uplink_errc_dcch_data(self, cpu, msg_struct_addr):

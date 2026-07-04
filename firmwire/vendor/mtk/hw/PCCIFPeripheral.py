@@ -481,11 +481,21 @@ class PCCIF_Periph(PassthroughPeripheral):
                 assert value == 0
                 self.handleAMMS()
                 return True
-            if value == 15:  # TODO: should prbly be >=15
+            if value == 15:
                 # RINGQ_SRAM
                 self.handle_SRAM_write()
-            else:
-                if value >= len(self.ringbuffer.offsets):
+            else: # drivers/misc/mediatek/eccci/mt6768/ccif_hif_platform.h
+                if value >= 16 and value <= 19:
+                    self.log.error(
+                        f"CCCI Received D2H exception ({value})"
+                    )
+                    assert False
+                elif value == 21:
+                    self.log.error(
+                        f"CCCI Received AP MD SEQ error"
+                    )
+                    assert False
+                elif value >= len(self.ringbuffer.offsets):
                     self.log.error(
                         f"PCCIF ring no too large (value: {value}, is only: {len(self.ringbuffer.offsets)})"
                     )

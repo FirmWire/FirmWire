@@ -141,12 +141,7 @@ TASKNAMES_DEACTIVATED = [
     # 2G/3G
     "MRF",
     # LTE
-    "ERT",
     "EMACDL",
-    "EL2H",
-    "EL2",
-    "EL1",
-    "EL1_MPC",
     "MLL1",
     # Middle ware
     "AUDIO",

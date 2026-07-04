@@ -274,6 +274,8 @@ class MTKLoader(firmwire.loader.Loader):
 
             while name in debug_info:
                 name = name + "_"
+            
+            name = name.strip("()")
             debug_info[name] = (start, end - start)
 
             if debug_data.tell() >= file_syms_off:

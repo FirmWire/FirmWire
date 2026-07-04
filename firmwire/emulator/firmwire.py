@@ -48,6 +48,8 @@ class FirmWireEmu(ABC):
         self.signal_count = 0
         self.start_time = None
         self._gsmtap_ip = None
+        self._mem_dump_config = { "dump_file": None, "load_at": None, "load_after_snapshot": False, "addrs": None, "enabled": False }
+        self.memory_tracing_enabled = str(os.environ.get("ENABLE_MEMORY_TRACING", 0)) == '1'
 
     def set_breakpoint(self, address, handler, temporary=False, continue_after=False):
         """
@@ -317,6 +319,9 @@ class FirmWireEmu(ABC):
             self.remove_breakpoint(bid)
 
         assert len(self._bp_map) == 0
+        
+        if self.is_memory_dump_to_be_restored_on_snapshot():
+            self.restore_memory_dump()
 
         breakpoints = machine_state["breakpoints"]
 
@@ -752,3 +757,61 @@ class FirmWireEmu(ABC):
 
     def get_gsmtap_ip(self):
         return self._gsmtap_ip
+    
+    def configure_memory_dump(self, dump_file, load_at, addrs):
+        """Configure memory dump loading options"""
+        self._mem_dump_config["dump_file"] = dump_file
+        self._mem_dump_config["addrs"] = addrs
+        self._mem_dump_config["enabled"] = True
+
+        if load_at == "SNAPSHOT_RESTORE":
+            self._mem_dump_config["load_after_snapshot"] = True
+            self.load_memory_dump()
+            return
+            
+        if isinstance(load_at, str):
+            #sym = self.symbol_table.lookup(load_at)
+            sym = self.symbols.get(load_at, None)
+            if sym is None:
+                log.error(
+                    f"Unable to find symbol {load_at} for memory dump restore"
+                )
+                raise RuntimeError("Memory dump configuration failure")
+            else:
+                self._mem_dump_config["load_at"] = sym
+        else:
+            self._mem_dump_config["load_at"] = load_at
+
+        self.load_memory_dump()
+        self.set_breakpoint(self._mem_dump_config["load_at"], self.mem_dump_load_hook, continue_after=True, temporary=True)
+        self.memory_tracing_enabled = False # disable memory tracing when using memory dumps until dump is restored
+
+    def is_memory_dump_enabled(self):
+        """Check if memory dump loading is enabled"""
+        return self._mem_dump_config["enabled"]
+
+    def is_memory_dump_to_be_restored_on_snapshot(self):
+        """Check if memory dump loading is configured to occur after snapshot restore"""
+        return self._mem_dump_config["load_after_snapshot"]
+
+    def get_memory_dump_file_path(self):
+        """Get the memory dump file path"""
+        return self._mem_dump_config["dump_file"]
+
+    def get_mem_dump_addrs(self):
+        """Get the memory dump addresses configuration"""
+        return self._mem_dump_config["addrs"]
+
+    def mem_dump_load_hook(self):
+        if not self._mem_dump_config["enabled"]:
+            log.debug("Memory dump loading not enabled, skipping hook")
+            return
+        self.restore_memory_dump()
+
+    def load_memory_dump(self):
+        """Overrideable function to load a memory dump for later restoring. Called during configuration."""
+        pass
+
+    def restore_memory_dump(self):
+        """Overrideable function to restore a memory dump. Called once the recovery breakpoint is hit or during snapshot restore, if requested."""
+        raise Exception("Memory dump loading not implemented for current machine")
