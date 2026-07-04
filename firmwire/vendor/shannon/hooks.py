@@ -484,7 +484,7 @@ def pal_MsgSendTo(self, cpustate, tb, hook):
             qid,
             itemType,
         )
-    
+
     msg_id = int.from_bytes(
         self.qemu.pypanda.physical_memory_read(msgAddr, 4), "little"
     )
@@ -493,15 +493,16 @@ def pal_MsgSendTo(self, cpustate, tb, hook):
         self.qemu.pypanda.physical_memory_read(msgAddr+6, 2), "little"
     )
 
-    msg_id_lte_pdcp_data_ind = self.symbol_table.lookup("MSG_ID_LTE_PDCP_DATA_IND").address
-    msg_id_lte_pdcp_data_req = self.symbol_table.lookup("MSG_ID_LTE_PDCP_DATA_REQ").address
+    if self.get_gsmtap_ip() is not None:
+        msg_id_lte_pdcp_data_ind = self.symbol_table.lookup("MSG_ID_LTE_PDCP_DATA_IND").address
+        msg_id_lte_pdcp_data_req = self.symbol_table.lookup("MSG_ID_LTE_PDCP_DATA_REQ").address
 
-    if(msg_id == msg_id_lte_pdcp_data_ind):
-        dump_inbound_rrc_data(self, cpustate, msgAddr)
-      
-   
-    elif(msg_id == msg_id_lte_pdcp_data_req):
-        dump_outbound_rrc_data(self, cpustate, msgAddr)
+        if(msg_id == msg_id_lte_pdcp_data_ind):
+            dump_inbound_rrc_data(self, cpustate, msgAddr)
+
+
+        elif(msg_id == msg_id_lte_pdcp_data_req):
+            dump_outbound_rrc_data(self, cpustate, msgAddr)
 
 
 def pal_QueueCreate(self, cpustate, tb, hook):
@@ -561,13 +562,13 @@ def dump_outbound_rrc_data(self, cpustate, msg_struct_addr):
     msg_id = int.from_bytes(
         self.qemu.pypanda.physical_memory_read(msg_struct_addr, 4), "little"
     )
-    
+
     msg_id_lte_pdcp_data_req = self.symbol_table.lookup("MSG_ID_LTE_PDCP_DATA_REQ").address
 
     assert (
         msg_id == msg_id_lte_pdcp_data_req
     ), f"Tried to extract a data buffer from wrong msg type (is: {msg_id}, expected: MSG_ID_LTE_PDCP_DATA_REQ ({msg_id_lte_pdcp_data_req})"
-  
+
     data_ptr = int.from_bytes(
         self.qemu.pypanda.physical_memory_read(msg_struct_addr + 12, 4), "little"
     )
@@ -577,7 +578,7 @@ def dump_outbound_rrc_data(self, cpustate, msg_struct_addr):
     log_emit(self, cpustate, "\033[92mSending outbound RRC->PDCP DCCH data at %04X for %02X bytes\033[0m",
         data_ptr,
         data_len)
-   
+
     gsmtap_hdr = create_gsmtap_header(
         payload_type=gsmtap_type.LTE_RRC, sub_type=gsmtap_lte_rrc_types.UL_DCCH
     )
@@ -591,13 +592,13 @@ def dump_inbound_rrc_data(self, cpustate, msg_struct_addr):
     msg_id = int.from_bytes(
         self.qemu.pypanda.physical_memory_read(msg_struct_addr, 2), "little"
     )
-    
+
     msg_id_lte_pdcp_data_ind = self.symbol_table.lookup("MSG_ID_LTE_PDCP_DATA_IND").address
 
     assert (
         msg_id == msg_id_lte_pdcp_data_ind
     ), f"Tried to extract a data buffer from wong ilm msg type (is: ${msg_id}, expected: MSG_ID_LTE_PDCP_DATA_IND ({msg_id_lte_pdcp_data_ind}))"
-    
+
 
     data_ptr = int.from_bytes(
         self.qemu.pypanda.physical_memory_read(msg_struct_addr + 16, 4), "little"
@@ -605,10 +606,10 @@ def dump_inbound_rrc_data(self, cpustate, msg_struct_addr):
     data_len = int.from_bytes(
         self.qemu.pypanda.physical_memory_read(msg_struct_addr + 12, 4), "little"
     )
-    
+
     rb_id = int.from_bytes(
         self.qemu.pypanda.physical_memory_read(msg_struct_addr + 8, 4), 'little')
-    
+
     if(rb_id == 0x2):
         log_emit(self, cpustate,
             "\033[92mReceived inbound RRC->PDCP DCCH data at %04X for %02X bytes\033[0m",
@@ -622,9 +623,9 @@ def dump_inbound_rrc_data(self, cpustate, msg_struct_addr):
         send_gsmtap_packet(
             self, gsmtap_hdr, self.qemu.pypanda.physical_memory_read(data_ptr, data_len)
         )
-    
+
     elif(rb_id == 0x12):
-        
+
         log_emit(self, cpustate,
             "\033[92mReceived inbound RRC->PDCP BCCH data at %04X for %02X bytes\033[0m",
             data_ptr,
