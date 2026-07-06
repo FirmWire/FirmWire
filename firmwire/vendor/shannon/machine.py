@@ -26,6 +26,8 @@ from firmwire.util.unwind_arm import ARM32Unwinder
 from firmwire.util.port import find_free_port
 from firmwire.util.hex import hexdump
 
+from firmwire.vendor.shannon.common.memory_dump import ShannonMemoryDump
+
 log = logging.getLogger(__name__)
 
 
@@ -631,6 +633,11 @@ r12: %08x     cpsr: %08x""" % (
         """
         injects a task in TASK_LIST at given idx
         """
+        
+        # Do this before task injection
+        if str(os.environ.get("ENABLE_MEMORY_TRACING", 0)) == '1':
+            self.symbol_table.lookup("SYM_MEMORY_TRACING_ENABLED").address = 0x1
+            self.install_tracing_callbacks()
 
         assert type(task) == TaskMod
 
@@ -833,7 +840,7 @@ r12: %08x     cpsr: %08x""" % (
                     self.symbol_table.lookup("set_task_affinity").address, set_affinity)
 
                 main_task_counter = self.symbol_table.lookup("main_task_counter").address
-                
+
                 from firmwire.vendor.shannon.hooks import warm_boot_change, protect_write_access
                 new_mem_mappings = [
                     {
@@ -972,6 +979,7 @@ r12: %08x     cpsr: %08x""" % (
             disable_list += ["Acpm"]  # timeout twice OS_fatal_error
             disable_list += ["L1C"]  # hang for S360
 
+
         elif self.modem_soc.name == "S335AP":
 
             def ff2(self):
@@ -1027,3 +1035,476 @@ r12: %08x     cpsr: %08x""" % (
                 return False
 
         return True
+
+    def load_memory_dump(self):
+        self.symbol_table.lookup("SYM_MEMORY_DUMP_ENABLED").address = 0x1
+
+        # The range we want to restore mememory in
+        restore_start = self.modem_file.get_section("MAIN").load_address
+        try:
+            nv = self.modem_file.get_section("NV")
+        except KeyError:
+            nv = self.modem_file.get_section("NV_PROT")
+
+        restore_end = nv.load_address + nv.size
+        dump_base = self.modem_file.get_section("BOOT").load_address
+
+        self._shannon_memory_dump = ShannonMemoryDump(self.get_memory_dump_file_path(), restore_start, restore_end, dump_base)
+        if(self._mem_dump_config["load_after_snapshot"] is False):
+            #if we have a snapshot, the heap has been restored before taking that snapshot, so no need to do it twice
+            self.set_breakpoint(
+                self.symbol_table.lookup("SYM_POST_INIT_MEMORY").address,
+                lambda x: self.fixup_heap(),
+                continue_after=True,
+                temporary=True
+            )
+
+    def restore_memory_dump(self):
+        log.info("Restoring memory dump")
+        count = 0
+        for (addr, size) in self.get_mem_dump_addrs():
+            buf = self._shannon_memory_dump.get(addr, size)
+            if buf is None:
+                continue
+
+            self.qemu.pypanda.physical_memory_write(addr, buf)
+            count += 1
+            if count % 500 == 0:
+                log.debug(f"Restored {count} chunks from memory dump...")
+        log.info(f"Memory dump recovery completed, restored {count} chunks")
+        self.memory_tracing_enabled = str(os.environ.get("ENABLE_MEMORY_TRACING", 0)) == '1'
+
+        self.disable_write_to_logging_global()
+        self.disable_known_roadblocks()
+
+
+    # Overwriting large chunks can be a bit buggy, so write in chunks
+
+    def write_in_chunks(self, begin, end, binary):
+        chunk_size = 0x1000
+
+        chunks = int((end - begin) / chunk_size)
+        remainder = (end - begin) % chunk_size
+
+        cur_chunk = 0
+        for i in range(chunks):
+            addr = self._shannon_memory_dump.from_dump(begin+cur_chunk)
+            self.qemu.pypanda.physical_memory_write(addr, bytes(binary[cur_chunk:cur_chunk+chunk_size]))
+            cur_chunk += chunk_size
+
+        if(remainder > 0):
+            addr = self._shannon_memory_dump.from_dump(end-remainder)
+            self.qemu.pypanda.physical_memory_write(addr,bytes(binary[cur_chunk:]))
+
+    # This makes sure that new allocations do not fall in the range of to-be-restored heap chunks from the dump
+    def fixup_heap(self):
+        idx_start = self._shannon_memory_dump.to_dump(self._shannon_memory_dump.heap.heap_metadata_start)
+        idx_end = self._shannon_memory_dump.to_dump(self._shannon_memory_dump.heap.heap_start)
+        self.write_in_chunks(idx_start, idx_end, self._shannon_memory_dump.dump[idx_start:idx_end])
+        start_addr = self.symbol_table.lookup("SYM_HEAP_PARTITION").address
+        for i in range(5):
+            ll_head = start_addr + i * 8
+            ll_tail = start_addr + (i*8) + 4
+            self.qemu.write_memory(ll_head, 4, ll_head.to_bytes(4, "little"), raw=True)
+            self.qemu.write_memory(ll_tail, 4, ll_head.to_bytes(4, "little"), raw=True)
+
+    def install_tracing_callbacks(self):
+        ins_cache = {}
+        self.currentFn = 0x0
+        self.currentLr = 0x0
+        self.map_to_fn = {}
+        self.map_to_lr = {}
+        self.is_thumb = False
+        self.function_memory_access = {'r': [], 'w': []}
+
+        self.disable_known_timers()
+        self.disable_write_to_logging_global()
+
+        self.disable_known_roadblocks()
+
+
+        @self.qemu.pypanda.cb_phys_mem_before_write
+        def mem_before_write(env, pc, addr, size, buf):
+            if not self.memory_tracing_enabled:
+                return
+
+            ra = self.qemu.pypanda.arch.get_reg(env, "LR")
+            sp = self.qemu.pypanda.arch.get_reg(env, "SP")
+            obj = {"addr": addr, "length": size, "pc": pc, "ra": ra, "sp": sp, "fn": self.currentFn, "fn_ra": self.currentLr}
+            self.function_memory_access['w'].append(obj)
+            sys.stdout.write(f"\nMEM_WRITE: {json.dumps(obj)}\n")
+            sys.stdout.flush()
+
+        @self.qemu.pypanda.cb_phys_mem_before_read
+        def mem_before_read_hook(env, pc, addr, size):
+            if not self.memory_tracing_enabled:
+                return
+
+            ra = self.qemu.pypanda.arch.get_reg(env, "LR")
+            sp = self.qemu.pypanda.arch.get_reg(env, "SP")
+            obj = {"addr": addr, "length": size, "pc": pc, "ra": ra, "sp": sp, "fn": self.currentFn, "fn_ra": self.currentLr}
+            self.function_memory_access['r'].append(obj)
+            sys.stdout.write(f"\nMEM_READ: {json.dumps(obj)}\n")
+            sys.stdout.flush()
+
+        # This is needed to approximate the current function and the previous function
+        # Doing this in capstone is really slow, so we match on bytes instead
+
+        @self.qemu.pypanda.cb_after_block_exec
+        def after_block_exec(cpustate, tb, exitcode):
+
+            tb_pc = tb.pc
+            tb_size = tb.size
+            pc = self.qemu.pypanda.arch.get_pc(cpustate)
+            tb_end = tb_pc + tb_size
+            ins_size = 4
+
+            if(tb_end in ins_cache):
+                action = ins_cache[tb_end]
+                if(action == 1):
+                    #branch
+                    self.map_to_fn[tb_end] = self.currentFn
+                    self.map_to_lr[self.currentFn] = self.currentLr
+                    self.currentLr = self.currentFn
+                    self.currentFn = pc
+                elif(action == 2):
+                    #Pop/ LDM / bx LR
+                    self.map_to_fn[tb_end] = self.currentFn
+                    try:
+                        self.currentFn = self.map_to_fn[pc]
+                    except:
+                        self.map_to_fn[pc] = pc
+                        self.currentFn = pc
+                    try:
+                        self.currentLr = self.map_to_lr[self.currentFn]
+                    except:
+                        self.currentLr = self.currentFn
+
+
+                elif(action == 3):
+                    #ldr pc, ...
+                    self.map_to_fn[tb_end] = self.currentFn
+                    self.curentFn = pc
+            else:
+
+                #https://developer.arm.com/documentation/ddi0406/cd/?lang=en
+                if(self.is_thumb is False):
+                    #ARM MODE
+                    ins_bytes = self.qemu.pypanda.physical_memory_read(tb_end-ins_size, ins_size)
+                    ins_val = int.from_bytes(ins_bytes, "little")
+
+                    #unconditional instruction
+                    if(ins_val >> 28 == 0xf):
+                        if(ins_val >> 20 & 0xe0 == 0xa0):
+                        #bl/blx immediate
+                            self.map_to_fn[tb_end] = self.currentFn
+                            self.map_to_lr[self.currentFn] = self.currentLr
+                            self.currentLr = self.currentFn
+                            self.currentFn = pc
+                            ins_cache[tb_end] = 1
+                        else:
+                            ins_cache[tb_end] = 0
+
+                    elif(ins_val >> 20 & 0xff == 0x12):
+                        #miscellaneous BX / BLX instruction -> branch to register
+                        if(ins_val & 0xf0 == 0x10):
+                            #misc BX
+                            if(ins_val & 0xf == 0xe):
+                                #misc BX LR
+                                self.map_to_fn[tb_end] = self.currentFn
+                                try:
+                                    self.currentFn = self.map_to_fn[pc]
+
+                                except KeyError:
+                                    self.map_to_fn[pc] = pc
+                                    self.currentFn = pc
+
+                                try:
+                                    self.currentLr = self.map_to_lr[self.currentFn]
+                                except KeyError:
+                                    self.currentLr = self.currentFn
+                                    self.map_to_lr[self.currentFn] = self.currentLr
+                                ins_cache[tb_end] = 2
+
+                            else:
+                                #misc BX rX
+                                self.map_to_fn[tb_end] = self.currentFn
+                                self.map_to_lr[self.currentFn] = self.currentLr
+                                self.currentLr = self.currentFn
+                                self.currentFn = pc
+                                ins_cache[tb_end] = 1
+
+                        elif(ins_val & 0xf0 == 0x30):
+                            #misc blx rX
+                            self.map_to_fn[tb_end] = self.currentFn
+                            self.map_to_lr[self.currentFn] = self.currentLr
+                            self.currentLr = self.currentFn
+                            self.currentFn = pc
+                            ins_cache[tb_end] = 1
+                        else:
+                            ins_cache[tb_end] = 0
+
+                    elif(ins_val >> 24 & 0xf == 0xb):
+                            #normal bl / blx Imm
+                        self.map_to_fn[tb_end] = self.currentFn
+                        self.map_to_lr[self.currentFn] = self.currentLr
+                        self.currentLr = self.currentFn
+                        self.currentFn = pc
+                        ins_cache[tb_end] = 1
+
+                    elif(ins_val >> 24 & 0xf == 0xa and ins_val >> 28 == 0xe and abs(pc - tb_end) > 0x1000):
+                        #b immediate condition = always -> always branch A8-286 1110
+                        self.map_to_fn[tb_end] = self.currentFn
+                        self.map_to_lr[self.currentFn] = self.currentLr
+
+                        self.currentLr = self.currentFn
+                        self.currentFn = pc
+                        ins_cache[tb_end] = 1
+
+                    elif(ins_val >> 20 & 0xff == 0x8b or ins_val >> 20 & 0xe5 == 0x85):
+                            #POP/ LDM
+                            self.map_to_fn[tb_end] = self.currentFn
+                            try:
+                                self.currentFn = self.map_to_fn[pc]
+
+                            except KeyError:
+                                self.map_to_fn[pc] = pc
+                                self.currentFn = pc
+                            try:
+                                self.currentLr = self.map_to_lr[self.currentFn]
+                            except KeyError:
+                                self.currentLr = self.currentFn
+                                self.map_to_lr[self.currentFn] = self.currentLr
+                            ins_cache[tb_end] = 2
+
+                    elif(ins_val >> 20 & 0xc5 == 0x41):
+                        #LDR PC
+                        Rn = ins_val >> 16 & 0xf
+                        if(Rn == 0xd):
+                            self.map_to_fn[tb_end] = self.currentFn
+                            try:
+                                self.currentFn = self.map_to_fn[pc]
+
+                            except KeyError:
+                                self.map_to_fn[pc] = pc
+                                self.currentFn = pc
+                            try:
+                                self.currentLr = self.map_to_lr[self.currentFn]
+                            except KeyError:
+                                self.currentLr = self.currentFn
+                                self.map_to_lr[self.currentFn] = self.currentLr
+
+                            ins_cache[tb_end] = 2
+                        elif(Rn == 0xf):
+                            self.map_to_fn[tb_end] = self.currentFn
+                            self.curentFn = pc
+                            ins_cache[tb_end] = 3
+                        else:
+                            ins_cache[tb_end] = 0
+                    else:
+                        ins_cache[tb_end] = 0
+
+                else:
+                    #THUMB MODE
+                    if(tb_size == 2):
+                        ins_size = 2
+
+                    ins_bytes = self.qemu.pypanda.physical_memory_read(tb_end-ins_size, ins_size)
+                    ins_val = int.from_bytes(ins_bytes, "little")
+                    thumb_ins = ins_val >> 11 & 0x1f
+
+                    if(thumb_ins >= 0x1d):
+                        #0x1d, 0x1e, 0x1f
+                        #32 bit ins
+                        if(ins_val >> 11 & 0x1f == 0x1e):
+                            if(ins_val >> 28 & 0xc == 0xc or (ins_val >> 30 & 3 == 2 and abs(pc - tb_end) > 0x200 and
+                                (ins_val >> 28 & 1 or ins_val >> 6 & 0xf == 0xe))):
+                            #BL/BLX/B IMM
+                                self.map_to_fn[tb_end] = self.currentFn
+                                self.map_to_lr[self.currentFn] = self.currentLr
+
+                                self.currentLr = self.currentFn
+                                self.currentFn = pc
+                                ins_cache[tb_end] = 1
+                            else:
+                                ins_cache[tb_end] = 0
+
+
+                        elif(ins_val >> 4 & 0xffd == 0xe91):
+                            self.map_to_fn[tb_end] = self.currentFn
+                            try:
+                                self.currentFn = self.map_to_fn[pc]
+
+                            except KeyError:
+                                self.map_to_fn[pc] = pc
+                                self.currentFn = pc
+                            try:
+                                self.currentLr = self.map_to_lr[self.currentFn]
+                            except KeyError:
+                                self.currentLr = self.currentFn
+                                self.map_to_lr[self.currentFn] = self.currentLr
+
+                            ins_cache[tb_end] = 2
+
+
+                        elif(ins_val & 0xffff == 0xe8bd):
+                            self.map_to_fn[tb_end] = self.currentFn
+                            try:
+                                self.currentFn = self.map_to_fn[pc]
+
+                            except KeyError:
+                                self.map_to_fn[pc] = pc
+                                self.currentFn = pc
+                            try:
+                                self.currentLr = self.map_to_lr[self.currentFn]
+                            except KeyError:
+                                self.currentLr = self.currentFn
+                                self.map_to_lr[self.currentFn] = self.currentLr
+
+                            ins_cache[tb_end] = 2
+
+                        #ldr pc
+                        elif(ins_val >> 4 & 0xff7 == 0xf85):
+                            if(ins_val >> 28 == 0xf):
+                                #LDR pc, ...
+                                Rn = ins_val & 0xf
+                                if(Rn == 0xd):
+                                    #load $PC from $SP
+                                    #handle same as POP
+                                    self.map_to_fn[tb_end] = self.currentFn
+                                    try:
+                                        self.currentFn = self.map_to_fn[pc]
+
+                                    except KeyError:
+                                        self.map_to_fn[pc] = pc
+                                        self.currentFn = pc
+                                    try:
+                                        self.currentLr = self.map_to_lr[self.currentFn]
+                                    except KeyError:
+                                        self.currentLr = self.currentFn
+                                        self.map_to_lr[self.currentFn] = self.currentLr
+                                    ins_cache[tb_end] = 2
+                                elif(Rn == 0xf):
+                                    #load $PC from $PC
+                                    self.map_to_fn[tb_end] = self.currentFn
+                                    self.curentFn = pc
+                                    ins_cache[tb_end] = 3
+                                else:
+                                    ins_cache[tb_end] = 0
+
+                            #POP/LDM
+                        else:
+                            ins_cache[tb_end] = 0
+                    else:
+                        #16bit ins
+                        ins_size = 2
+
+                        if(ins_val > 0xffff):
+                            ins_val = ins_val >> 16
+
+                        if(ins_val >> 6 & 0x3fc == 0x11c):
+                            #BX / BLX
+                            if(ins_val >> 3 & 0xf == 0xe):
+                                #bx lr
+                                self.map_to_fn[tb_end] = self.currentFn
+                                try:
+                                    self.currentFn = self.map_to_fn[pc]
+                                except KeyError:
+                                    self.map_to_fn[pc] = pc
+                                    self.currentFn = pc
+
+                                try:
+                                    self.currentLr = self.map_to_lr[self.currentFn]
+                                except KeyError:
+                                    self.currentLr = self.currentFn
+                                    self.map_to_lr[self.currentFn] = self.currentLr
+
+                                ins_cache[tb_end] = 2
+
+                            else:
+                                #bx/blx rX
+                                self.map_to_fn[tb_end] = self.currentFn
+                                self.map_to_lr[self.currentFn] = self.currentLr
+
+                                self.currentLr = self.currentFn
+                                self.currentFn = pc
+                                ins_cache[tb_end] = 1
+
+                        elif(ins_val >> 5 & 0x7f0 == 0x5e0):
+                                self.map_to_fn[tb_end] = self.currentFn
+                                try:
+                                    self.currentFn = self.map_to_fn[pc]
+                                except KeyError:
+                                    self.map_to_fn[pc] = pc
+                                    self.currentFn = pc
+                                try:
+                                    self.currentLr = self.map_to_lr[self.currentFn]
+                                except KeyError:
+                                    self.currentLr = self.currentFn
+                                    self.map_to_lr[self.currentFn] = self.currentLr
+
+                                ins_cache[tb_end] = 2
+
+                        elif(ins_val >> 11 == 0x1c):
+                            if(abs(pc - tb_end) > 0x200):
+                                self.map_to_fn[tb_end] = self.currentFn
+                                self.map_to_lr[self.currentFn] = self.currentLr
+
+                                self.currentLr = self.currentFn
+                                self.currentFn = pc
+                                ins_cache[tb_end] = 1
+                            else:
+                                ins_cache[tb_end] = 0
+
+
+                        else:
+                            ins_cache[tb_end] = 0
+
+            self.is_thumb = bool(cpustate.env_ptr.thumb)
+
+
+    def disable_known_timers(self):
+        # Busy Wait
+        self.patch("pal_BusyWait1", b"\x70\x47")
+        self.patch("pal_BusyWait2", b"\x70\x47")
+
+    def disable_known_roadblocks(self):
+        # These are purely optional, but are known to block execution
+        self.patch("LteRrc_Timer_GUARD", b"\xff\x25")
+        self.patch("Nas_MacCheck", b"\x4f\xf0\x01\x00")
+
+    def disable_write_to_logging_global(self):
+        # This is a weird global, but for some messages
+        # this global variable is set to 1, preventing
+        # any RRC debug lines to printed afterwars
+
+        from firmwire.vendor.shannon.hooks import protect_write_access
+
+        sym = self.symbol_table.lookup("LteRrcBoolPrintLog")
+        if(sym is None):
+            log.debug("Cannot find pattern LteRrcBoolPrintLog, some debug logs might be missing")
+
+        else:
+
+            self.install_mem_hooks(
+                [
+                    {
+                        "start": sym.address,
+                        "end":   sym.address + 4,
+                        "handler": protect_write_access,
+                        "write": True,
+                        "kwargs": {
+                            "label": "LteRrcBoolPrintLog",
+                            "const_value": 0x0,
+                            "on_after": True,
+                        },
+                    },
+                ]
+            )
+
+    def patch(self, sym_name, bt):
+        sym = self.symbol_table.lookup(sym_name)
+        if(sym is None):
+            log.error("Cannot find symbol %s, not disabling it" % sym_name)
+        else:
+            self.qemu.pypanda.physical_memory_write(sym.address, bt)

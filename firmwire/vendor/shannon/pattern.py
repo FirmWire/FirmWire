@@ -168,6 +168,59 @@ PATTERNS_CORTEX_R = {
         "lookup": handlers.find_msg_id_lte_pdcp_data_req,
         "required": False
     },
+    "SYM_POST_INIT_MEMORY":
+    {
+        "pattern": [
+            "f0 b5 03 20 85 b0 8d f8 00 00"
+        ]
+
+    },
+
+    "SYM_HEAP_PARTITIONS_INIT": {
+        "pattern": [
+            "70 b5 04 46 ???? 29 62 a8 60 ???? ???? 01 60 ???? 41 60 ???? 81 60 ???? c1 60 ???? 01 61 ???? 41 61 ???? 81 61 1c 30 ???? 01 60 ???? 41 60"
+        ],
+        "post_lookup": handlers.find_heap_metadata,
+    },
+
+    "SYM_MEMORY_DUMP_ENABLED" : {
+        "lookup": lambda data, offset: 0x0,
+    },
+    "SYM_MEMORY_TRACING_ENABLED" : {
+        "lookup": lambda data, offset: 0x0,
+    },
+    "LteRrcBoolPrintLog" : {
+        "pattern": [
+            "4cf25434 01f10806 2027 00f10805 ??4a 0120 1070"
+        ],
+        "offset": 14,
+        "post_lookup" : handlers.find_LteRrcBoolPrintLog,
+    },
+    "pal_BusyWait1": {
+        "pattern": [
+            "2de9f041 0446 ???????? 0746 1348 808a 00fb04f6"
+        ]
+    },
+    "pal_BusyWait2": {
+        "pattern": [
+            "0949 70b5 898a 01fb00f6 ??f7???? 0446 e543"
+        ]
+    },
+    "Nas_MacCheck":
+    {
+        "pattern": [
+            "04 22 59 46 04 a8 ???????? 01 28 06 46 40 f2 e3 15 ?? d0 ?? 48 02 90 20 68 ???????? 00 28 ?? db 20 68 ???????? 02 28 ?? da 20 68",
+            "04 22 59 46 04 a8 ???????? ?? 25 01 28 06 46 ?? d0 ?? 48 54 30 02 90 20 68 ???????? 00 28 ?? db 20 68 ???????? 02 28 ?? da 20 68",
+            "04 22 59 46 04 a8 ???????? ?? 25 01 28 06 46 ?? d0 ?? 48 02 90 20 68 ???????? 00 28 ?? db 20 68 ???????? 02 28 ?? da 20 68"
+
+        ],
+        "offset": 6,
+    },
+    "LteRrc_Timer_GUARD" : {
+        "pattern": [
+            "25 6a 01 26 00 2d ?? d0 ?? 46 ???????? 94 f8 2d 10 ?? 4b 61 b1 01 29 01 d0 1d 46 1c e0"
+        ],
+    },
 }
 
 PATTERNS_CORTEX_A = {

@@ -597,7 +597,7 @@ def dump_inbound_rrc_data(self, cpustate, msg_struct_addr):
 
     assert (
         msg_id == msg_id_lte_pdcp_data_ind
-    ), f"Tried to extract a data buffer from wong ilm msg type (is: ${msg_id}, expected: MSG_ID_LTE_PDCP_DATA_IND ({msg_id_lte_pdcp_data_ind}))"
+    ), f"Tried to extract a data buffer from wrong msg type (is: ${msg_id}, expected: MSG_ID_LTE_PDCP_DATA_IND ({lte_pdcp_data_ind_msg_id}))"
 
 
     data_ptr = int.from_bytes(
@@ -625,7 +625,6 @@ def dump_inbound_rrc_data(self, cpustate, msg_struct_addr):
         )
 
     elif(rb_id == 0x12):
-
         log_emit(self, cpustate,
             "\033[92mReceived inbound RRC->PDCP BCCH data at %04X for %02X bytes\033[0m",
             data_ptr,
