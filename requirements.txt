@@ -29,6 +29,3 @@ protobuf
 colorama
 
 sortedcontainers==2.4.0
-
-# Utils
-regex

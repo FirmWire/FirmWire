@@ -9,7 +9,7 @@ from .queue import QUEUE_STRUCT_SIZE
 
 from capstone import *
 from capstone.arm import *
-import regex as re
+import re
 
 log = logging.getLogger(__name__)
 
