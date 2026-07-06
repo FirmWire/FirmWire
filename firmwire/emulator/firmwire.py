@@ -323,8 +323,6 @@ class FirmWireEmu(ABC):
         if self.is_memory_dump_to_be_restored_on_snapshot():
             self.restore_memory_dump()
 
-        if self.is_memory_dump_to_be_restored_on_snapshot():
-            self.restore_memory_dump()
 
         breakpoints = machine_state["breakpoints"]
 

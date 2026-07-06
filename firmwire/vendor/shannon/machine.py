@@ -1476,7 +1476,7 @@ r12: %08x     cpsr: %08x""" % (
     def disable_write_to_logging_global(self):
         # This is a weird global, but for some messages
         # this global variable is set to 1, preventing
-        # any RRC debug lines to printed afterwars
+        # any RRC debug lines to be printed afterwards
 
         from firmwire.vendor.shannon.hooks import protect_write_access
 
