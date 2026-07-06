@@ -395,7 +395,8 @@ def main() -> int:
             if module_name is None:
                 continue
             if not machine.load_and_inject_task(module_name):
-                print("loaded task: " + module_name)
+                log.error(f"Unable to load task: {module_name}. ABORTING!")
+                return -1
 
         machine.print_task_list()
 
@@ -405,4 +406,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
