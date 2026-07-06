@@ -316,4 +316,27 @@ PATTERNS_CORTEX_A = {
         "lookup": handlers.find_counter,
         "soc_match": ["S5123", "S5123AP"],
     },
+    # PHY_IPC_C2P_Sender: recover the CP->PHY ring base, published as
+    # SYM_PHY_IPC_C2P_RING_BASE and consumed by the PhyIpc peripheral to drain
+    # the ring (see PhyIpcPeripheral.py). The two Cortex-A NR variants differ in
+    # how the sender loads the base, so each SoC family gets its own entry:
+    #
+    #  - S5123AP (e.g. G991B): base via a `bl` to a thunk. Pattern anchors on the
+    #    prologue + `add.w r5, r0, r4, lsl #8` bracketing that first bl; the
+    #    handler decodes bl -> thunk -> movw/movt.
+    #  - S5123 (e.g. oriole): base built inline as `movw rD / movt rD` in the
+    #    prologue (no call). Pattern wildcards the two immediate-bearing
+    #    instructions; the handler decodes them in place.
+    "PHY_IPC_C2P_Sender_thunked": {
+        "pattern": "2de9f04f 83b0 0e46 0446 ???????? 00eb0425",
+        "post_lookup": handlers.get_phy_ipc_c2p_ring_base_thunked,
+        "required": False,
+        "soc_match": ["S5123AP"],
+    },
+    "PHY_IPC_C2P_Sender_inline": {
+        "pattern": "2de9f04f 83b0 ???????? 0546 8846 ????????",
+        "post_lookup": handlers.get_phy_ipc_c2p_ring_base_inline,
+        "required": False,
+        "soc_match": ["S5123"],
+    },
 }

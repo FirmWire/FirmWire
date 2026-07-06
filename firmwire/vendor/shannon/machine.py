@@ -810,6 +810,21 @@ r12: %08x     cpsr: %08x""" % (
             dsp_periph.dsp_sync0 = self.symbol_table.lookup("DSP_SYNC_WORD_0").address
             dsp_periph.dsp_sync1 = self.symbol_table.lookup("DSP_SYNC_WORD_1").address
 
+        # Tell the PhyIpc doorbell peripheral where the CP->PHY ring lives so it
+        # can model the (un-emulated) PHY draining it. Without this the ring
+        # fills and PHY_IPC_C2P_Sender asserts `actFlag == FLAG_CLEAR`.
+        sym_phy_base = self.symbol_table.lookup("SYM_PHY_IPC_C2P_RING_BASE")
+        if sym_phy_base is not None and "PhyIpc" in self.peripheral_map:
+            self.peripheral_map["PhyIpc"].ring_base = sym_phy_base.address
+            log.info(
+                "PhyIpc: CP->PHY ring base = %#010x", sym_phy_base.address
+            )
+        elif "PhyIpc" in self.peripheral_map:
+            log.warning(
+                "SYM_PHY_IPC_C2P_RING_BASE unresolved; PhyIpc drain disabled "
+                "(PHY_IPC_C2P_Sender may assert)"
+            )
+
         disable_list = []
 
         if self.modem_soc.name in ("S5000AP", "S5123AP", "S5133AP"):
