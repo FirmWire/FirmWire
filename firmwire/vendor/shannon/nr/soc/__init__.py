@@ -34,6 +34,12 @@ class S5123(ShannonSOC):
             SOCPeripheral(MsiPeripheral,        0x15000000, 0x1000, name="MSI"),
             SOCPeripheral(Unknown7Peripheral,   0x10000000, 0x1000, name="UNK7"),
             SOCPeripheral(Unknown11Peripheral,  0x83050000, 0x1000, name="UNK11"),
+            SOCPeripheral(
+                PhyIpcPeripheralCortexA,
+                0xEF101000,  # page holding the CP->PHY C2P doorbell (0xEF101F00)
+                0x1000,
+                name="PhyIpc",
+            ),
         ]
 
 class S5123AP(ShannonSOC):
@@ -68,6 +74,12 @@ class S5123AP(ShannonSOC):
                 0x1000,
                 name="DSPPeripheral",
                 sync=[0xc1, 0x1bc],
+            ),
+            SOCPeripheral(
+                PhyIpcPeripheralCortexA,
+                0xEF101000,  # page holding the CP->PHY C2P doorbell (0xEF101F00)
+                0x1000,
+                name="PhyIpc",
             ),
         ]
 

@@ -581,6 +581,75 @@ def s5123_get_dsp_sync1(self, sym, data, offset):
     return True
 
 
+def _decode_thumb_bl(bl_addr, hw1, hw2):
+    """Decode a 32-bit Thumb BL/BLX (T1) at `bl_addr` to its absolute target."""
+    S = (hw1 >> 10) & 1
+    imm10 = hw1 & 0x3FF
+    J1 = (hw2 >> 13) & 1
+    J2 = (hw2 >> 11) & 1
+    imm11 = hw2 & 0x7FF
+    I1 = (~(J1 ^ S)) & 1
+    I2 = (~(J2 ^ S)) & 1
+    imm = (S << 24) | (I1 << 23) | (I2 << 22) | (imm10 << 12) | (imm11 << 1)
+    if S:
+        imm -= 1 << 25
+    return (bl_addr + 4 + imm) & 0xFFFFFFFF
+
+
+def _publish_phy_ipc_ring_base(self, base, detail):
+    """Publish SYM_PHY_IPC_C2P_RING_BASE (consumed by the PhyIpc peripheral)."""
+    self.symbol_table.set("SYM_PHY_IPC_C2P_RING_BASE", base)
+    log.info("PHY IPC C2P ring base: %#010x (%s)", base, detail)
+    return True
+
+
+def get_phy_ipc_c2p_ring_base_thunked(self, sym, data, offset):
+    """S5123AP (e.g. G991B): the ring base is loaded via a function call.
+
+    `sym` is PHY_IPC_C2P_Sender's entry. Its first `bl` (at +0xa: push / sub sp
+    / mov r6,r1 / mov r4,r0) calls a tiny thunk that returns the base via
+    `movw rD,#lo; movt rD,#hi`. Decode the bl to find the thunk, then its
+    immediates. The base is scatter-loaded RAM (per-build); the field offsets
+    used by the PhyIpc peripheral are compile-time constants.
+    """
+    fn = sym.address - offset
+    bl_off = fn + 0xA
+    if bl_off + 4 > len(data):
+        log.error("PHY_IPC_C2P_Sender bl out of section range")
+        return False
+    hw1, hw2 = struct.unpack("<HH", data[bl_off : bl_off + 4])
+    thunk = _decode_thumb_bl(sym.address + 0xA, hw1, hw2)
+
+    t = thunk - offset
+    if t < 0 or t + 8 > len(data):
+        log.error("PHY IPC base thunk %#010x outside section", thunk)
+        return False
+
+    movw = decode_movw(struct.unpack("<I", data[t : t + 4])[0])
+    movt = decode_movw(struct.unpack("<I", data[t + 4 : t + 8])[0])
+    base = (movt << 16) | movw
+    return _publish_phy_ipc_ring_base(
+        self, base, "sender %#010x, thunk %#010x" % (sym.address, thunk)
+    )
+
+
+def get_phy_ipc_c2p_ring_base_inline(self, sym, data, offset):
+    """S5123 (e.g. oriole): the ring base is loaded inline, no function call.
+
+    `sym` is PHY_IPC_C2P_Sender's entry. The base is built directly in the
+    prologue as `movw rD,#lo` (at +0x6) and `movt rD,#hi` (at +0xe), bracketing
+    the `mov r5,r0; mov r8,r1` arg saves. Decode those two immediates.
+    """
+    fn = sym.address - offset
+    if fn + 0x12 > len(data):
+        log.error("PHY_IPC_C2P_Sender inline movw/movt out of section range")
+        return False
+    movw = decode_movw(struct.unpack("<I", data[fn + 0x6 : fn + 0xA])[0])
+    movt = decode_movw(struct.unpack("<I", data[fn + 0xE : fn + 0x12])[0])
+    base = (movt << 16) | movw
+    return _publish_phy_ipc_ring_base(self, base, "sender %#010x, inline" % sym.address)
+
+
 def find_task_table(data, offset):
     bp_task = BinaryPattern("task", offset=1)
     bp_task.from_str(b"\x00" + TASK_NAME_TO_FIND + b"\x00")
