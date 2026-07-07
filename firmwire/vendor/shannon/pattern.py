@@ -13,6 +13,12 @@ PATTERNS_COMMON = {
         "required": True,
         "align": 2
     },
+    "SYM_MEMORY_DUMP_ENABLED" : {
+        "lookup": lambda data, offset: 0x0,
+    },
+    "SYM_MEMORY_TRACING_ENABLED" : {
+        "lookup": lambda data, offset: 0x0,
+    },
 }
 
 PATTERNS_CORTEX_R = {
@@ -183,12 +189,6 @@ PATTERNS_CORTEX_R = {
         "post_lookup": handlers.find_heap_metadata,
     },
 
-    "SYM_MEMORY_DUMP_ENABLED" : {
-        "lookup": lambda data, offset: 0x0,
-    },
-    "SYM_MEMORY_TRACING_ENABLED" : {
-        "lookup": lambda data, offset: 0x0,
-    },
     "LteRrcBoolPrintLog" : {
         "pattern": [
             "4cf25434 01f10806 2027 00f10805 ??4a 0120 1070"
