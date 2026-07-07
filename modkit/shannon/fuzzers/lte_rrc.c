@@ -47,18 +47,17 @@ void fuzz_single()
 {
     uint32_t input_size;
     uint16_t size;
-    uart_puts("[+] Allocating Qitem\n");
+    MODEM_LOG("[+] Allocating Qitem\n");
     struct qitem_lte_rrc * item = pal_MemAlloc(4, sizeof(struct qitem_lte_rrc), __FILE__, __LINE__);
     if (!item) {
-      uart_puts("ALLOC FAILED");
+      MODEM_LOG("ALLOC FAILED");
       return;
     }
-    uart_puts("[+] Getting Work\n");
+    MODEM_LOG("[+] Getting Work\n");
     char * buf = getWork(&input_size);
     size = (uint16_t) input_size;
 
-    uart_puts("[+] Received n bytes: ");
-    uart_dump_hex((uint8_t *)buf, size); // Print some for testing
+    MODEM_LOG("[+] Received n bytes: 0x%x", size);
 
     // Max size before size is forced reduced
     if (size > 1025) {
@@ -69,7 +68,7 @@ void fuzz_single()
 
     char * asn_pl = pal_MemAlloc(4, input_size - 1, __FILE__, __LINE__);
 
-    uart_puts("[+] Filling the qitem\n");
+    MODEM_LOG("[+] Filling the qitem\n");
     item->header.msgGroup = 0;
     item->header.size = sizeof(struct qitem_lte_rrc) - sizeof(struct qitem_header);
     item->header.op = SYM_LTERRC_INT_MOB_CMD_HO_FROM_IRAT_MSG_ID;
@@ -81,14 +80,14 @@ void fuzz_single()
     item->asn_pl = asn_pl;
 
 
-    uart_puts("[+] FIRE\n");
+    MODEM_LOG("[+] FIRE\n");
     startWork(0, 0xffffffff); // memory range to collect coverage
     pal_MsgSendTo(qid, item, 2);
-    uart_puts("[+] Setting Event\n");
+    MODEM_LOG("[+] Setting Event\n");
     uart_dump_hex((uint8_t *) group, 4);
     uart_dump_hex((uint8_t *) &pal_SmSetEvent, 4);
     pal_SmSetEvent(&group, 4);
-    uart_puts("[+] Event set\n");
+    MODEM_LOG("[+] Event set\n");
     doneWork(0);
-    uart_puts("[+] WorkDone\n");
+    MODEM_LOG("[+] WorkDone\n");
 }

@@ -8,6 +8,7 @@ const char TASK_NAME[] = "HELLO\0";
 
 void task_main(){
     while(1) {
-        uart_puts("Hello World!\r\n");
+        //uart_puts("Hello World!\r\n");
+        MODEM_LOG("Hello World!\r\n");
     }
 }

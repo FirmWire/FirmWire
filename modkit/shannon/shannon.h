@@ -70,6 +70,24 @@ struct pal_event_group {
   void * unk5;
 };
 
+
+typedef struct {
+    uint32_t magic;
+    uint32_t unk1;
+    uint32_t unk2;
+    uint32_t unk_magic;
+    char *message;
+    uint32_t linenum;
+    char *file;
+} TraceEntry;
+
+typedef struct {
+    TraceEntry *te;
+    uint32_t flags;
+} LogContext;
+
+
+
 int32_t queuename2id(const char * name);
 struct pal_event_group *eventname2addr(const char *name);
 struct pal_event_group *eventid2addr(int32_t event_id);
@@ -82,6 +100,7 @@ MODKIT_FUNCTION_SYMBOL(void *, pal_MemAlloc, int type, uint32_t size, const char
 MODKIT_FUNCTION_SYMBOL(void, pal_Sleep, int time)
 MODKIT_FUNCTION_SYMBOL(void, pal_SmSetEvent, struct pal_event_group ** event, uint32_t code)
 MODKIT_FUNCTION_SYMBOL(void, pal_MemFree, void *ptr, const char * szFile, unsigned int line)
+MODKIT_FUNCTION_SYMBOL(void, log_printf, LogContext *, ...)
 MODKIT_DATA_SYMBOL(struct pal_queue *, SYM_QUEUE_LIST)
 MODKIT_DATA_SYMBOL(struct pal_event_group **, SYM_EVENT_GROUP_LIST)
 
@@ -90,5 +109,17 @@ MODKIT_DATA_SYMBOL(struct pal_event_group **, SYM_EVENT_GROUP_LIST)
 MODKIT_DATA_SYMBOL(uint16_t, SYM_LTERRC_INT_MOB_CMD_HO_FROM_IRAT_MSG_ID)
 MODKIT_DATA_SYMBOL(uint8_t, SYM_MEMORY_TRACING_ENABLED)
 MODKIT_DATA_SYMBOL(uint8_t, SYM_MEMORY_DUMP_ENABLED)
+
+#define MODEM_LOG(fmt, ...)           \
+do {                                  \
+    TraceEntry _te;                   \
+    LogContext _ctx;                  \
+    _te.message = fmt;                \
+    _te.linenum = __LINE__;           \
+    _te.file = __FILE__;              \
+    _ctx.te = &_te;                   \
+    log_printf(&_ctx, ##__VA_ARGS__); \
+} while(0)
+
 
 #endif // _SHANNON_H

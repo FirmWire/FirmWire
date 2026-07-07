@@ -117,9 +117,9 @@ int glink_process_cmd()
 
   if (size != sizeof(header)) {
     if (!size) {
-      uart_puts("No new header to read\n");
+      MODEM_LOG("No new header to read\n");
     } else {
-      uart_puts("glink header received is too small! Bug in fifo :(\n");
+      MODEM_LOG("glink header received is too small! Bug in fifo :(\n");
     }
     return -1;
   }
@@ -128,21 +128,21 @@ int glink_process_cmd()
 
   // Note: This can never happen as len is u8
   if (header.len > GLINK_MAX_SIZE) {
-    uart_puts("Illegal header received - len too big\n");
+    MODEM_LOG("Illegal header received - len too big\n");
     return -1;
   }
 
   size = glink_dequeue(glink_payload, header.len);
 
   if (size != header.len) {
-    uart_puts("glink payload received is too small! Bug in Fifo :(\n");
+    MODEM_LOG("glink payload received is too small! Bug in Fifo :(\n");
     return -1;
   }
 
   switch(header.cmd) {
     case GLINK_SEND_QUEUE_INDIR: {
 
-      uart_puts("GLINK SEND_QUEUE_INDIRECT\n");
+      MODEM_LOG("GLINK SEND_QUEUE_INDIRECT\n");
 
       struct glink_queue_buf *msg = (struct glink_queue_buf *)glink_payload;
 
@@ -157,8 +157,8 @@ int glink_process_cmd()
           int srcId = queuename2id(msg->srcName);
 
           if (srcId == -1 || dstId == -1) {
-            uart_puts(msg->srcName);
-            uart_puts("GLINK unable to resolve QID name\n");
+            MODEM_LOG(msg->srcName);
+            MODEM_LOG("GLINK unable to resolve QID name\n");
             return -1;
           }
 
@@ -178,7 +178,7 @@ int glink_process_cmd()
       break;
 
     } case GLINK_SEND_QUEUE: {
-      uart_puts("GLINK SEND_QUEUE\n");
+      MODEM_LOG("GLINK SEND_QUEUE\n");
 
       struct glink_queue_buf *msg = (struct glink_queue_buf *)glink_payload;
 
@@ -192,7 +192,7 @@ int glink_process_cmd()
           int srcId = queuename2id(msg->srcName);
 
           if (srcId == -1 || dstId == -1) {
-            uart_puts("GLINK unable to resolve QID name\n");
+            MODEM_LOG("GLINK unable to resolve QID name\n");
             return -1;
           }
 
@@ -214,16 +214,16 @@ int glink_process_cmd()
     case GLINK_SET_EVENT: {
       struct glink_set_event *msg = (struct glink_set_event *)glink_payload;
 
-      uart_puts("GLINK SET_EVENT ");
-      uart_puts(msg->eventName);
-      uart_puts("\n");
+      MODEM_LOG("GLINK SET_EVENT ");
+      MODEM_LOG(msg->eventName);
+      MODEM_LOG("\n");
 
       struct pal_event_group *evt = eventname2addr(msg->eventName);
 
       if (!evt) {
-        uart_puts("GLINK invalid event name ");
-        uart_puts(msg->eventName);
-        uart_puts("\n");
+        MODEM_LOG("GLINK invalid event name ");
+        MODEM_LOG(msg->eventName);
+        MODEM_LOG("\n");
         return -1;
       }
 
@@ -232,15 +232,14 @@ int glink_process_cmd()
     }
     case GLINK_ALLOC_BLOCK: {
       if (header.len != 4) {
-          uart_puts("GLINK alloc block in wrong format");
+          MODEM_LOG("GLINK alloc block in wrong format");
           break;
       }
-      uart_puts("GLINK allocates a block: ");
       uint32_t size = *(uint32_t *) glink_payload;
-      uart_dump_hex( (uint8_t *)&size, 4);
       void * ptr = pal_MemAlloc(2, size, __FILE__, __LINE__);
 
       glink->access = (uint32_t) ptr;
+      MODEM_LOG("GLINK allocated a block: 0x%08x (size: 0x%x)\n", ptr, size);
 
       break;
     }
@@ -248,7 +247,7 @@ int glink_process_cmd()
       struct glink_call_func *msg = (struct glink_call_func *)glink_payload;
       uint32_t ret = 0;
 
-      uart_puts("[+] Calling function\n");
+      MODEM_LOG("[+] Calling function\n");
 
 #define VARCALL_WORD uint32_t
 #define VARCALL(fn, c, ...) ((VARCALL_WORD(*)(PRIMITIVE_CAT(REPL, c)(VARCALL_WORD)))fn)(__VA_ARGS__)
@@ -264,7 +263,7 @@ int glink_process_cmd()
         case 5: ret = VARCALL(fn, 5, A(0), A(1), A(2), A(3), A(4)); break;
         case 6: ret = VARCALL(fn, 6, A(0), A(1), A(2), A(3), A(4), A(5)); break;
         default:
-          uart_puts("GLINK ERROR unhandled arg count\n");
+          MODEM_LOG("GLINK ERROR unhandled arg count\n");
           break;
       }
 
@@ -272,7 +271,7 @@ int glink_process_cmd()
       break;
     }
     default:
-      uart_puts("GLINK ERROR unhandled CMD\n");
+      MODEM_LOG("GLINK ERROR unhandled CMD\n");
       return -1;
   }
 
@@ -280,17 +279,17 @@ int glink_process_cmd()
 }
 
 void task_main() {
-  uart_puts("INTERACTIVE: starting\n");
+  MODEM_LOG("INTERACTIVE: starting\n");
 
   zero_bss();
 
   while (1) {
-    uart_puts("INTERACTIVE: enter\n");
+    MODEM_LOG("INTERACTIVE: enter\n");
 
     int ret = glink_process_cmd();
 
     if (ret == -1) {
-      uart_puts("INTERACTIVE: sleep\n");
+      MODEM_LOG("INTERACTIVE: sleep\n");
       pal_Sleep(500);
     }
   }

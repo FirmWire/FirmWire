@@ -74,22 +74,22 @@ int doneWork(int val)
 }
 
 void task_main() {
-    uart_puts("[+] AFL task starting\n");
+    MODEM_LOG("[+] AFL task starting\n");
 
     // we're essentially acting like a kernel
     zero_bss();
 
     // this settles the baseband tasks
-    uart_puts("[+] Init sleep\n");
+    MODEM_LOG("[+] Init sleep\n");
     if(!SYM_MEMORY_DUMP_ENABLED) pal_Sleep(200);
 
     if (!fuzz_single_setup()) {
-      uart_puts("[!] Fuzzer init error\n");
+      MODEM_LOG("[!] Fuzzer init error\n");
       for (;;) ;
     }
-    uart_puts("[+] Fuzzer init complete\n");
+    MODEM_LOG("[+] Fuzzer init complete\n");
 
-    uart_puts("[+] Starting fork server\n");
+    MODEM_LOG("[+] Starting fork server\n");
     startForkserver(SYM_MEMORY_TRACING_ENABLED ^ 1);
 
     while (1) {

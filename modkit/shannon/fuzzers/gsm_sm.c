@@ -62,12 +62,12 @@ void fuzz_single_multi(char * buf, size_t size);
 
 void fuzz_single_multi(char * buf, size_t size)
 {
-    uart_puts("[+] Allocating Qitem\n");
+    MODEM_LOG("[+] Allocating Qitem\n");
     struct qitem_sm * item = pal_MemAlloc(4, sizeof(struct qitem_sm), __FILE__, __LINE__);
     char * pdu = pal_MemAlloc(4, AFL_MAX_INPUT, __FILE__, __LINE__);
 
     if (!item || !pdu) {
-      uart_puts("ALLOC FAILED");
+      MODEM_LOG("ALLOC FAILED");
       return;
     }
 
@@ -76,14 +76,14 @@ void fuzz_single_multi(char * buf, size_t size)
     // GSM radio messages are usually limited in size
     size = size > 512 ? 512 : size;
 
-    uart_puts("[+] Received n bytes: ");
+    MODEM_LOG("[+] Received n bytes: ");
     uart_dump_hex((uint8_t *) &size, 4); // Print some for testing
 
     if (size < 3) {
       return;
     }
 
-    uart_puts("[+] Filling the qitem\n");
+    MODEM_LOG("[+] Filling the qitem\n");
     item->header.op = 0;
 
     // Only target the RADIO_MSG msgs
@@ -92,7 +92,7 @@ void fuzz_single_multi(char * buf, size_t size)
 
     memcpy(item->pdu, buf, size);
 
-    uart_puts("[+] FIRE\n");
+    MODEM_LOG("[+] FIRE\n");
 
     pal_MsgSendTo(qid, item, 2);
 }*/
@@ -102,25 +102,24 @@ void fuzz_single()
     uint32_t input_size;
     uint16_t size;
 
-    uart_puts("[+] Allocating Qitem\n");
+    MODEM_LOG("[+] Allocating Qitem\n");
     struct qitem_sm * item = pal_MemAlloc(4, sizeof(struct qitem_sm), __FILE__, __LINE__);
     char * pdu = pal_MemAlloc(4, AFL_MAX_INPUT, __FILE__, __LINE__);
 
     if (!item || !pdu) {
-      uart_puts("ALLOC FAILED");
+      MODEM_LOG("ALLOC FAILED");
       return;
     }
 
     item->pdu = pdu;
 
-    uart_puts("[+] Getting Work\n");
+    MODEM_LOG("[+] Getting Work\n");
     char * buf = getWork(&input_size);
     size = (uint16_t) input_size;
     // GSM radio messages are usually limited in size
     size = size > 512 ? 512 : size;
 
-    uart_puts("[+] Received n bytes: ");
-    uart_dump_hex((uint8_t *) &size, 4); // Print some for testing
+    MODEM_LOG("[+] Received n bytes: 0x%x\n", size);
 
     if (size < 3) {
       startWork(0, 0xffffffff); // memory range to collect coverage
@@ -128,7 +127,7 @@ void fuzz_single()
       return;
     }
 
-    uart_puts("[+] Filling the qitem\n");
+    MODEM_LOG("[+] Filling the qitem\n");
     item->header.op = 0;
 
     // Only target the RADIO_MSG msgs
@@ -137,7 +136,7 @@ void fuzz_single()
 
     memcpy(item->pdu, buf, size);
 
-    uart_puts("[+] FIRE\n");
+    MODEM_LOG("[+] FIRE\n");
     startWork(0, 0xffffffff); // memory range to collect coverage
 
     pal_MsgSendTo(qid, item, 2);
