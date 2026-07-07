@@ -994,4 +994,7 @@ def find_LteRrcBoolPrintLog(self, sym, data, offset):
 
     maddr = sym.address + 2 + (ins & 0xff) * 4
     moffset = maddr - offset
-    return int.from_bytes(data[moffset:moffset+4], "little")
+    new_address = int.from_bytes(data[moffset:moffset+4], "little")
+    self.symbol_table.remove(sym.name)
+    self.symbol_table.add(sym.name, new_address)
+    return True
