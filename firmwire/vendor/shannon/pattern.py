@@ -198,12 +198,12 @@ PATTERNS_CORTEX_R = {
     },
     "pal_BusyWait1": {
         "pattern": [
-            "2de9f041 0446 ???????? 0746 1348 808a 00fb04f6"
+            "2de9f041 0446 ???????? 0746 1348 80?? 00fb04f6"
         ]
     },
     "pal_BusyWait2": {
         "pattern": [
-            "0949 70b5 898a 01fb00f6 ??f7???? 0446 e543"
+            "0949 70b5 89?? 01fb00f6 ??f7???? 0446 e543"
         ]
     },
     "Nas_MacCheck":
