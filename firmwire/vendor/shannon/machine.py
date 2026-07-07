@@ -1490,7 +1490,7 @@ r12: %08x     cpsr: %08x""" % (
                 [
                     {
                         "start": sym.address,
-                        "end":   sym.address + 4,
+                        "end":   sym.address + 1,
                         "handler": protect_write_access,
                         "write": True,
                         "kwargs": {
