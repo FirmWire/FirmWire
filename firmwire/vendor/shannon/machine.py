@@ -1050,14 +1050,14 @@ r12: %08x     cpsr: %08x""" % (
         dump_base = self.modem_file.get_section("BOOT").load_address
 
         self._shannon_memory_dump = ShannonMemoryDump(self.get_memory_dump_file_path(), restore_start, restore_end, dump_base)
-        if(self._mem_dump_config["load_after_snapshot"] is False):
-            #if we have a snapshot, the heap has been restored before taking that snapshot, so no need to do it twice
-            self.set_breakpoint(
-                self.symbol_table.lookup("SYM_POST_INIT_MEMORY").address,
-                lambda x: self.fixup_heap(),
-                continue_after=True,
-                temporary=True
-            )
+        # if we have a snapshot, the heap should have been restored before taking that snapshot
+        
+        self.set_breakpoint(
+            self.symbol_table.lookup("SYM_POST_INIT_MEMORY").address,
+            lambda x: self.fixup_heap(),
+            continue_after=True,
+            temporary=True
+        )
 
     def restore_memory_dump(self):
         log.info("Restoring memory dump")
