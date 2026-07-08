@@ -7,6 +7,10 @@ from firmwire.util.BinaryPattern import BinaryPattern
 from .task import get_task_layouts
 from .queue import QUEUE_STRUCT_SIZE
 
+from capstone import *
+from capstone.arm import *
+import re
+
 log = logging.getLogger(__name__)
 
 TASK_NAME_TO_FIND = b"GLAPD"
@@ -244,8 +248,8 @@ def find_queue_table(data, offset):
 
         npos = res[1]
         locs += [res]
-    
-    
+
+
     if len(locs) == 0:
         return None
 
@@ -260,7 +264,7 @@ def find_queue_table(data, offset):
 
     if rez is None or len(rez) < 1:
         # Try again but on the other string reference.
-        # It appears that S5123AP:G991BXXSIHYK1 uses locs[1][0] instead of locs[0][0] 
+        # It appears that S5123AP:G991BXXSIHYK1 uses locs[1][0] instead of locs[0][0]
         xref_target = locs[1][0] + offset
         bp_task_x = BinaryPattern("xref")
         bp_task_x.from_str(struct.pack("I", xref_target))
@@ -665,29 +669,29 @@ def find_task_table(data, offset):
             break
         npos = res[1]
         locs += [res]
-    
-    
+
+
     if len(locs) == 0:
         return None
-    
+
 
     # Finds two locations of task
-    xref_target = locs[0][0] + offset 
+    xref_target = locs[0][0] + offset
 
     bp_task_x = BinaryPattern("xref")
-    bp_task_x.from_str(struct.pack("I", xref_target)) 
+    bp_task_x.from_str(struct.pack("I", xref_target))
 
     rez = bp_task_x.findall(data, maxresults=2)
 
     if rez is None or len(rez) < 2:
         # Try again but on the other string reference.
-        # It appears that S5123AP:G991BXXSIHYK1 uses locs[1][0] instead of locs[0][0] 
+        # It appears that S5123AP:G991BXXSIHYK1 uses locs[1][0] instead of locs[0][0]
         xref_target = locs[1][0] + offset
         bp_task_x = BinaryPattern("xref")
         bp_task_x.from_str(struct.pack("I", xref_target))
         rez = bp_task_x.findall(data, maxresults=2)
-    
-    if len(rez) < 2: 
+
+    if len(rez) < 2:
         return None
 
     # the first result is another reference we dont care about
@@ -794,9 +798,9 @@ def find_msg_id_lte_pdcp_data_ind(self, sym, data, offset):
     return True
 
 def find_msg_id_lte_pdcp_data_req(data, offset):
-    
+
     # Not the cleanest pattern, but search for code that
-    # prepares an LTE_PDCP_DATA_REQ message, using an `adr` 
+    # prepares an LTE_PDCP_DATA_REQ message, using an `adr`
     # or `ldr` instruction
 
     bp = BinaryPattern("msg_id_lte_pdcp_data_req")
@@ -827,20 +831,18 @@ def find_msg_id_lte_pdcp_data_req(data, offset):
         res = bp_code.find(data, pos=npos)
         if res is None:
             break
-        
+
         ins = int.from_bytes(data[res[0]:res[0]+2], "little")
-        
+
         target = 0
 
         if((ins >> 11) == 0x14):
             # adr
             target = res[0] + 4 + 4 * (ins & 0xFF)
-        
         elif((ins >> 11) == 0x9):
             # pc relative ldr
             target = res[0] + 4 + 4 * (ins & 0xFF)
-        
-        
+
         if(target in llocs):
             # +0x18 is the type: LTE_PDCP_DATA_REQ
             # +0x8  is the message id == ??20 ??60
@@ -848,6 +850,151 @@ def find_msg_id_lte_pdcp_data_req(data, offset):
             val = int.from_bytes(data[res[0]-0x4:res[0]-0x4+0x2], "little") & 0xFF
             log.info(f"Resolved MSG_ID_LTE_PDCP_DATA_REQ to : {val:#x}")
             return val
-        
+
         npos = res[1]
-    
+
+def parse_scatterload_table(saddress, data, main_toc):
+    __scatterload_bp =  BinaryPattern("__scatterload__")
+    __scatterload_bp.from_hex("0a a0 90 e8 00 0c 82 44 83 44 aa f1 01 07 da 45 ???? ???????? ???????? ba e8 0f 00 13 f0 01 0f 18 bf fb 1a 43 f0 01 03 18 47")
+    (start, end) = __scatterload_bp.find(data)
+    __scatterload_table_start = (end+main_toc.load_address) + int.from_bytes(data[end:end+4], byteorder="little", signed=True)
+    __scatterload_table_end = (end+main_toc.load_address) + int.from_bytes(data[end+4:end+8], byteorder="little", signed=True)
+
+    entry_size = 16
+
+    __scatter_load_copy_bp = BinaryPattern("__scatterload_copy")
+    __scatter_load_copy_bp.from_hex("10 3a 24 bf 78 c8 78 c1 ???? 52 07 24 bf 30 c8 30 c1 44 bf 04 68 0c 60 70 47")
+    __scatter_load_copy_off = __scatter_load_copy_bp.find(data)
+    to_match = main_toc.load_address + __scatter_load_copy_off[0]
+    idx_start = __scatterload_table_start - main_toc.load_address
+
+    for i in range((__scatterload_table_end - __scatterload_table_start) // entry_size):
+        table_entry = data[idx_start+(i*entry_size):idx_start+(i*entry_size)+entry_size]
+        fn = int.from_bytes(table_entry[12:], "little")
+        if(fn == to_match):
+            src_ptr = int.from_bytes(table_entry[:4], "little")
+            size = int.from_bytes(table_entry[8:12], "little")
+            dst_ptr = int.from_bytes(table_entry[4:8], "little")
+
+            if(saddress >= src_ptr and saddress <= src_ptr + size):
+                dst_ptr = int.from_bytes(table_entry[4:8], "little")
+                target_addr = dst_ptr + (saddress - src_ptr)
+                break
+
+    return (src_ptr, dst_ptr, target_addr)
+
+def heap_metadata(fn_code, code, mnem, pattern):
+    thumb_offset = 2
+    arch = Cs(CS_ARCH_ARM, CS_MODE_THUMB)
+
+
+    re_pattern = re.compile(pattern)
+    res = []
+    ins = []
+
+    for (address, size, mnemonic, op_str) in arch.disasm_lite(code, 0):
+        if(mnemonic == "ret"):
+            break
+        ins.append((fn_code+address, mnemonic, op_str))
+        if(mnemonic == mnem):
+            ops = op_str.split(", ")
+            src_reg = ops[0]
+            offset = 0
+            if(len(ops) == 3):
+                offset = int(ops[2].strip("[#]\n"), 16)
+            elif(len(ops) != 2):
+                print(f"ERROR len(ops) = {len(ops)}")
+                return
+            source_reg = ops[0]
+            target_reg = ops[1].strip("[]\n")
+
+            if(src_reg == target_reg):
+                taint_reg = target_reg
+                back_offset = offset
+                pc_offset = 0
+                target = 0
+                last_addr = 0
+
+                for(ins_addr, mnem_back, op_str_back) in ins[::-1]:
+                    if(taint_reg in op_str_back):
+                        if(mnem_back == "ldr"):
+                            ops = op_str_back.split(", ")
+                            if(taint_reg == ops[0]):
+                                if(len(ops) == 3):
+                                    pc_offset = int(ops[2].strip("[#]\n"), 16)
+                                if(len(ops) > 3):
+                                    print("Decompile error")
+                                    return False
+                                dst_reg = ops[1].strip("[")
+                                if(dst_reg == "pc"):
+                                    target = ins_addr + pc_offset + abs(ins_addr - last_addr)
+                                    res.append((source_reg, target_reg, target, back_offset))  #pc already updated
+
+                                    break
+                                else:
+                                    taint_reg = dst_reg
+                        elif(mnem_back == "adds"):
+                            ops = op_str_back.split(", ")
+                            if(taint_reg == ops[0]):
+                                back_offset += int(ops[1].strip("#\n"), 16)
+                        elif(mnem_back == "add.w"):
+                            ops = op_str_back.split(", ")
+                            if(taint_reg == ops[0]):
+                                if(len(ops) == 3):
+                                    back_offset += int(ops[2].strip("#\n"), 16)
+                                    taint_reg = ops[1]
+                                else:
+                                    print("adds with unsupported args")
+                                    return False
+                    last_addr = ins_addr
+
+
+        #todo match the actual instruction : DIRECT BRANCH / INDIRECT BRANCH
+        if(mnemonic == "b" or mnemonic == "bl" or mnemonic == "blx" or mnemonic == "bx"):
+            #branch may switch instruction set
+            target = int(op_str.strip("#\n"), 16)
+            if(target & 1 != 0):
+                thumb_offset = 2
+            else:
+                thumb_offset = 4
+
+    assert(len(res) == 10)
+    for i in range(1, 10):
+        assert(res[i][3] - res[i-1][3] == 4)
+        assert(res[i][2] == res[i-1][2])
+        assert(res[i][0] == res[i-1][0])
+        assert(res[i][1] == res[i-1][1])
+
+    return res[0]
+
+def find_heap_metadata(self, sym, d, o):
+    main_toc = self.modem_file.get_section("MAIN")
+    offset = sym.address - main_toc.load_address
+    data = main_toc.data
+    code_len = 200
+
+    pattern = "r[0-c], \[r[0-c](, #(0x)?[0-f]+)?\]"
+
+    meta = heap_metadata(sym.address, data[offset:offset+code_len], "str", pattern)
+    (src_ptr, dst_ptr, target_addr) = parse_scatterload_table(sym.address, data, main_toc)
+
+    final_offset = src_ptr + target_addr + meta[2] - sym.address - dst_ptr - main_toc.load_address
+    name = "SYM_HEAP_PARTITION"
+    final_ptr = int.from_bytes(data[final_offset:final_offset+4], "little") + meta[3]
+    self.symbol_table.add(name, final_ptr)
+
+    return True
+
+def find_LteRrcBoolPrintLog(self, sym, data, offset):
+    # instruction should be a relative load to the PC (load literal)
+
+    ins = int.from_bytes(data[sym.address-offset:sym.address-offset+2], "little")
+    if(ins >> 8 != 0x4a):
+        return False
+
+    maddr = sym.address + 2 + (ins & 0xff) * 4
+    moffset = maddr - offset
+    new_address = int.from_bytes(data[moffset:moffset+4], "little")
+    self.symbol_table.remove(sym.name)
+    self.symbol_table.add(sym.name, new_address)
+    return True

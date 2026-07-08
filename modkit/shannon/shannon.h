@@ -88,6 +88,7 @@ MODKIT_DATA_SYMBOL(struct pal_event_group **, SYM_EVENT_GROUP_LIST)
 // We need this symbol only for LTE RRC fuzzing. However, Symbol addition seem
 // only be working from here.
 MODKIT_DATA_SYMBOL(uint16_t, SYM_LTERRC_INT_MOB_CMD_HO_FROM_IRAT_MSG_ID)
-
+MODKIT_DATA_SYMBOL(uint8_t, SYM_MEMORY_TRACING_ENABLED)
+MODKIT_DATA_SYMBOL(uint8_t, SYM_MEMORY_DUMP_ENABLED)
 
 #endif // _SHANNON_H

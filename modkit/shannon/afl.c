@@ -81,7 +81,7 @@ void task_main() {
 
     // this settles the baseband tasks
     uart_puts("[+] Init sleep\n");
-    pal_Sleep(200);
+    if(!SYM_MEMORY_DUMP_ENABLED) pal_Sleep(200);
 
     if (!fuzz_single_setup()) {
       uart_puts("[!] Fuzzer init error\n");
@@ -90,7 +90,7 @@ void task_main() {
     uart_puts("[+] Fuzzer init complete\n");
 
     uart_puts("[+] Starting fork server\n");
-    startForkserver(1);
+    startForkserver(SYM_MEMORY_TRACING_ENABLED ^ 1);
 
     while (1) {
       fuzz_single();
