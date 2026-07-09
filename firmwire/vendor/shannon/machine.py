@@ -633,7 +633,7 @@ r12: %08x     cpsr: %08x""" % (
         """
         injects a task in TASK_LIST at given idx
         """
-        
+
         # Do this before task injection
         if str(os.environ.get("ENABLE_MEMORY_TRACING", 0)) == '1':
             self.symbol_table.lookup("SYM_MEMORY_TRACING_ENABLED").address = 0x1
@@ -716,7 +716,7 @@ r12: %08x     cpsr: %08x""" % (
                 sym_type,
                 write_size,
             )
-            self.qemu.wm(write_address, write_size, struct.pack("<I", addr), raw=True)
+            self.qemu.wm(write_address, write_size, addr)
 
         # resolve a free place in OSTASK_ARR
         task_arr = self.symbol_table.lookup("SYM_TASK_LIST").address
@@ -1051,7 +1051,7 @@ r12: %08x     cpsr: %08x""" % (
 
         self._shannon_memory_dump = ShannonMemoryDump(self.get_memory_dump_file_path(), restore_start, restore_end, dump_base)
         # if we have a snapshot, the heap should have been restored before taking that snapshot
-        
+
         self.set_breakpoint(
             self.symbol_table.lookup("SYM_POST_INIT_MEMORY").address,
             lambda x: self.fixup_heap(),
