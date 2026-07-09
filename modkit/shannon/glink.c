@@ -30,7 +30,11 @@ struct glink_cmd_header {
 
 #define QUEUE_NAME_SZ 64
 
+#define QUEUE_PARAM_ENCODING_SRC_AS_INT 0b01
+#define QUEUE_PARAM_ENCODING_DST_AS_INT 0b10
+
 struct glink_queue_buf {
+  uint32_t param_encoding; // Whether queues are passed as name or by ID
   char srcName[QUEUE_NAME_SZ]; // if srcName[0] == '\0': set op independently
   char dstName[QUEUE_NAME_SZ];
   uint32_t op; // used if srcName[0] == '\0'
@@ -151,10 +155,22 @@ int glink_process_cmd()
       struct qitem_gmm * qitem = pal_MemAlloc(2, sizeof(struct qitem_gmm), __FILE__, __LINE__);
       char *pdu = pal_MemAlloc(2, pdu_size, __FILE__, __LINE__);
 
-      int dstId = queuename2id(msg->dstName);
+      int dstId, srcId;
+      if ((msg->param_encoding & QUEUE_PARAM_ENCODING_DST_AS_INT) == 0) {
+        dstId = queuename2id(msg->dstName);
+      }
+      else {
+        dstId = (int) *msg->dstName;
+      }
+
       if ( msg->srcName[0] ) {
           /*  We are not using the manually set op field */
-          int srcId = queuename2id(msg->srcName);
+          if ((msg->param_encoding & QUEUE_PARAM_ENCODING_SRC_AS_INT) == 0) {
+            srcId = queuename2id(msg->srcName);
+          }
+          else {
+            srcId = (int) *msg->srcName;
+          }
 
           if (srcId == -1 || dstId == -1) {
             MODEM_LOG(msg->srcName);
@@ -186,10 +202,21 @@ int glink_process_cmd()
       size_t pdu_size = size - sizeof(struct glink_queue_buf);
       struct qitem_mm * qitem = pal_MemAlloc(2, sizeof(struct qitem_mm) + pdu_size, __FILE__, __LINE__);
 
-      int dstId = queuename2id(msg->dstName);
+      int srcId, dstId;
+      if ((msg->param_encoding & QUEUE_PARAM_ENCODING_DST_AS_INT) == 0) {
+        dstId = queuename2id(msg->dstName);
+      }
+      else {
+        dstId = (int) *msg->dstName;
+      }
       if ( msg->srcName[0] ) {
           /*  We are not using the manually set op field */
-          int srcId = queuename2id(msg->srcName);
+          if ((msg->param_encoding & QUEUE_PARAM_ENCODING_SRC_AS_INT) == 0) {
+            srcId = queuename2id(msg->srcName);
+          }
+          else {
+            srcId = (int) *msg->srcName;
+          }
 
           if (srcId == -1 || dstId == -1) {
             MODEM_LOG("GLINK unable to resolve QID name\n");

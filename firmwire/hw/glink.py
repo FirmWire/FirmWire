@@ -40,6 +40,8 @@ INT32SIZE = 4
 FIXED_NAME_LEN = 9  # 8 chars + \0
 QUEUE_NAME_SZ = 64  # 63 chars  + \0
 
+QUEUE_PARAM_ENCODING_SRC_AS_INT = 0b01
+QUEUE_PARAM_ENCODING_DST_AS_INT = 0b10
 
 class GLinkPeripheral(FirmWirePeripheral):
     def hw_read(self, offset, size):
@@ -151,8 +153,8 @@ class GLinkPeripheral(FirmWirePeripheral):
 
     def construct_queue_header(
         self,
-        src_qid_name: Union[bytes, str],
-        dst_qid_name: Union[bytes, str],
+        src_qid: Union[bytes, str, int],
+        dst_qid: Union[bytes, str, int],
         msg_group: int,
         op: Optional[int] = None,
     ) -> bytes:
@@ -160,11 +162,20 @@ class GLinkPeripheral(FirmWirePeripheral):
             assert len(src_qid_name) == 0  # requirement: opped message have no srcqueue
         else:
             op = 0
+        param_encoding = 0x00 # Default param encoding: queue by name
+        if type(src_qid) is int:
+            src_qid = src_qid.to_bytes(4,'little') + b"\x00"* (QUEUE_NAME_SZ - 4)
+            param_encoding |= QUEUE_PARAM_ENCODING_SRC_AS_INT
+        else:
+            src_qid = self.name2fixedlen(src_qid, QUEUE_NAME_SZ)
 
+        if type(dst_qid) is int:
+            dst_qid = dst_qid.to_bytes(4,'little') + b"\x00"* (QUEUE_NAME_SZ - 4)
+            param_encoding |= QUEUE_PARAM_ENCODING_DST_AS_INT
+        else:
+            dst_qid = self.name2fixedlen(dst_qid, QUEUE_NAME_SZ)
         return (
-            self.name2fixedlen(src_qid_name, QUEUE_NAME_SZ)
-            + self.name2fixedlen(dst_qid_name, QUEUE_NAME_SZ)
-            + struct.pack("<IH", op, msg_group)
+            param_encoding.to_bytes(4, 'little') + src_qid + dst_qid + struct.pack("<IH", op, msg_group)
         )
 
     def send_queue_indir(
@@ -194,8 +205,8 @@ class GLinkPeripheral(FirmWirePeripheral):
     def send_queue(
         self,
         indirect_buf: bool,
-        src_qid_name: Union[bytes, str],
-        dst_qid_name: Union[bytes, str],
+        src_qid: Union[bytes, str, int],
+        dst_qid: Union[bytes, str, int],
         msg_group: int,
         payload: bytes,
     ) -> bool:
@@ -207,7 +218,7 @@ class GLinkPeripheral(FirmWirePeripheral):
         else:
             cmd_type = GLINK_CMD_TYPE.GLINK_SEND_QUEUE
         msg = (
-            self.construct_queue_header(src_qid_name, dst_qid_name, msg_group) + payload
+            self.construct_queue_header(src_qid, dst_qid, msg_group) + payload
         )
         header = self.glink_header(cmd_type, len(msg))
         return self.send_cmd(header + msg)
