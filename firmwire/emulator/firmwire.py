@@ -160,12 +160,22 @@ class FirmWireEmu(ABC):
 
         return True
 
+    def configure_output(self):
+        # Due to the asynchronous interaction, buffered writes can lead to
+        # hangs of the output. Thus, we use unbuffered writes as long we
+        # are not fuzzing
+        if not self._fuzzing:
+            sys.stdout.reconfigure(write_through=True)
+            sys.stderr.reconfigure(write_through=True)
+
     def start(self, start_suspended=False, console=False):
         """Start the emulator"""
         assert self.qemu is not None
 
         qemu = self.qemu
         avatar = self.avatar
+
+        self.configure_output()
 
         try:
             print("==> BOOT")
@@ -194,6 +204,7 @@ class FirmWireEmu(ABC):
                 )
                 print("(?) Use `self` to access the machine!")
                 import IPython
+
 
                 IPython.embed_kernel()
 
@@ -319,7 +330,7 @@ class FirmWireEmu(ABC):
             self.remove_breakpoint(bid)
 
         assert len(self._bp_map) == 0
-        
+
         if self.is_memory_dump_to_be_restored_on_snapshot():
             self.restore_memory_dump()
 
@@ -758,7 +769,7 @@ class FirmWireEmu(ABC):
 
     def get_gsmtap_ip(self):
         return self._gsmtap_ip
-    
+
     def configure_memory_dump(self, dump_file, load_at, addrs):
         """Configure memory dump loading options"""
         self._mem_dump_config["dump_file"] = dump_file
@@ -769,7 +780,7 @@ class FirmWireEmu(ABC):
             self._mem_dump_config["load_after_snapshot"] = True
             self.load_memory_dump()
             return
-            
+
         if isinstance(load_at, str):
             #sym = self.symbol_table.lookup(load_at)
             sym = self.symbols.get(load_at, None)

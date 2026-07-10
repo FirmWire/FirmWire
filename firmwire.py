@@ -76,6 +76,13 @@ def get_args():
     parser.add_argument(
         "--gsmtap", type=str, help="Stream packets from inside the baseband to this IP on port 4729 (gsmtap)"
     )
+    parser.add_argument(
+        "-l",
+        "--guestlog-out",
+        type=str,
+        default=None,
+        help="File to re-direct guestlog output to (useful when running with --console)",
+    )
 
     parser.add_argument_group
 
@@ -319,6 +326,9 @@ def main() -> int:
     machine = loader.get_machine()
     machine.modkit.append_search_path("./modkit/%s/build" % (loader.NAME))
     machine.modkit.append_search_path("./")
+
+    if args.guestlog_out is not None:
+        machine.guest_logger.output_file = open(args.guestlog_out, 'w')
 
     log.info("FirmWire initializing %s", type(machine).__name__)
 

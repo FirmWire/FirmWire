@@ -1,11 +1,13 @@
 ## Copyright (c) 2022, Team FirmWire
 ## SPDX-License-Identifier: BSD-3-Clause
 import re
+from sys import stdout
 
 
 class FirmWireGuestLogger:
     def __init__(self, machine):
         self._machine = machine
+        self.output_file = stdout
         self.reset()
 
     def reset(self):
@@ -182,4 +184,4 @@ class FirmWireGuestLogger:
         )
 
     def _write(self, logdata):
-        print(logdata)
+        self.output_file.write(logdata + '\n')
