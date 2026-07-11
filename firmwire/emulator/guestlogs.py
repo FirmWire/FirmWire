@@ -185,3 +185,4 @@ class FirmWireGuestLogger:
 
     def _write(self, logdata):
         self.output_file.write(logdata + '\n')
+        self.output_file.flush()
