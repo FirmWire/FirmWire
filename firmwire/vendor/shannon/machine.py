@@ -418,14 +418,21 @@ r12: %08x     cpsr: %08x""" % (
         if log.isEnabledFor(logging.DEBUG):
             self.dump_memory_ranges()
 
-        rwx_region = self.find_safe_rwx_region()
+        if self.playground is not None:
+            rwx_region = self.playground
+            log.info("Using user defined RWX region [%08x - %08x]", rwx_region.begin, rwx_region.end)
 
-        if rwx_region is None:
-            log.error("Unable to find safe RWX region in baseband memory to store code")
-            return False
         else:
-            log.info("Found RWX region [%08x - %08x]", rwx_region.begin, rwx_region.end)
-            self.playground = rwx_region
+            rwx_region = self.find_safe_rwx_region()
+
+            if rwx_region is None:
+                log.error("Unable to find safe RWX region in baseband memory to store code")
+                return False
+            else:
+                log.info("Found RWX region [%08x - %08x]", rwx_region.begin, rwx_region.end)
+
+        self.playground = rwx_region
+
 
         ##############################################################
         # Initialize the targets
@@ -752,7 +759,7 @@ r12: %08x     cpsr: %08x""" % (
             task_struct_addr, len(task_struct.data), task_struct.data, raw=True
         )
 
-        log.info("Injected!")
+        log.info(f"Injected! Task Struct at 0x{task_struct_addr:x}")
 
         return task.address
 

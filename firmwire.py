@@ -6,10 +6,11 @@ import sys
 import os
 import re
 import logging
+from intervaltree import Interval
 
 import firmwire
 from firmwire.util.param import ParamValidator
-from firmwire.util.misc import arg_snapshot, download_url
+from firmwire.util.misc import arg_address_tuple, arg_snapshot, download_url
 from firmwire.emulator.init import MachineInitParams
 from _version import __version__
 
@@ -63,6 +64,14 @@ def get_args():
         dest="injected_task",
         help="Module to inject into baseband memory",
     )
+    parser.add_argument(
+        "-p",
+        "--playground-region",
+        type=arg_address_tuple,
+        dest="playground_region",
+        help="Playground region for injecting tasks (addr, size). Tries to auto-resolve by default.",
+    )
+
 
     parser.add_argument(
         "--restore-snapshot", type=str, help="Restore a snapshot by name"
@@ -330,6 +339,12 @@ def main() -> int:
     if args.guestlog_out is not None:
         machine.guest_logger.output_file = open(args.guestlog_out, 'w')
 
+
+    if args.playground_region:
+        addr = args.playground_region[0]
+        size = args.playground_region[1]
+        machine.playground = Interval(addr, addr+size)
+
     log.info("FirmWire initializing %s", type(machine).__name__)
 
     if not machine.initialize(loader, init_params):
@@ -337,6 +352,8 @@ def main() -> int:
         return 1
 
     log.info("Machine initialization time took %.2f seconds", machine.time_running())
+
+
 
     if args.mem_dump:
         machine.configure_memory_dump(

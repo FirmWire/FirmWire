@@ -45,6 +45,9 @@ def arg_tuple(s, lhs=None, rhs=None):
 def arg_snapshot(s):
     return arg_tuple(s, lhs=number_parse, rhs=str)
 
+def arg_address_tuple(s):
+    return arg_tuple(s, lhs=number_parse, rhs=number_parse)
+
 
 def number_parse(s):
     match = re.match(r"^(0x[a-fA-f0-9]+)|([0-9]+)$", s)
