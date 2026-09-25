@@ -5,6 +5,8 @@ import time
 
 import firmwire.vendor.shannon.pattern_handlers as handlers
 
+from firmwire.vendor.shannon.cxx_instance import MM_GENERAL_CONTEXT, instance_patterns
+
 log = logging.getLogger(__name__)
 
 PATTERNS_COMMON = {
@@ -392,4 +394,55 @@ PATTERNS_CORTEX_A = {
         "required": False,
         "soc_match": ["S5123"],
     },
+    # SMPF message API, used by the 5G-task fuzzing harnesses (see
+    # modkit/shannon/smpf.h). smpf_CreateMsg is the only one of these found by a
+    # plain byte pattern; the other three hang off it or off SendMsg__, because
+    # a byte pattern for them would be either ambiguous (several identical
+    # allocator copies) or impossible (a constant, not code).
+    "smpf_CreateMsg": {
+        "lookup": handlers.find_smpf_create_msg,
+        "soc_match": ["S5123", "S5123AP"],
+    },
+    "smpf_SendMsg": {
+        "lookup": handlers.find_smpf_send_msg,
+        "soc_match": ["S5123", "S5123AP"],
+    },
+    "smpf_MemAlloc": {
+        "lookup": handlers.find_smpf_mem_alloc,
+        "soc_match": ["S5123", "S5123AP"],
+    },
+    "SMPF_TASK_CREATED": {
+        "lookup": handlers.find_smpf_task_created,
+        "soc_match": ["S5123", "S5123AP"],
+    },
+    "MSG_ID_MM_RRC_DATA_IND": {
+        "lookup": handlers.find_msg_id_mm_rrc_data_ind,
+        "soc_match": ["S5123", "S5123AP"],
+    },
+    # byte 0 of the object it returns is IsFakeTestHarness
+    "FakeTestAssist_GetInstance": {
+        "lookup": handlers.find_fake_test_assist_get_instance,
+        "soc_match": ["S5123", "S5123AP"],
+    },
+    # NASOT harness symbols that happen to live on a C++ class. The vtable and
+    # constructor each class needs are generated from CXX_INSTANCES instead (see
+    # the update below); these two are what the harness itself calls. SetMmState
+    # is a vtable slot; NrmmStartProcedure_Wrapper is not virtual and has no data
+    # or movw/movt reference anywhere, so only its own bytes can find it.
+    "SetMmState": {
+        "cxx_class": MM_GENERAL_CONTEXT,
+        "lookup": handlers.cxx_vmethod(
+            MM_GENERAL_CONTEXT, 3, "2de9f0?? ??b0 ???????????? 1d46 1646"
+        ),
+        "soc_match": ["S5123", "S5123AP"],
+    },
+    "NrmmStartProcedure_Wrapper": {
+        # the `cmp #1` reads r1 on S5123 and its copy in r4 on S5123AP
+        "pattern": "b0b5 0c46 0546 01?? 03d1 2846 0221 ???????? "
+        "e86c 2146 bde8b040 ????????",
+        "soc_match": ["S5123", "S5123AP"],
+    },
 }
+
+# vtable and constructor of every class the runtime instance resolver knows
+PATTERNS_CORTEX_A.update(instance_patterns())

@@ -52,12 +52,13 @@ COMMON_DEP := $(addprefix $(BUILD_DIR)/, $(COMMON_SRC:.c=.d))
 
 #######################################
 
-MODS := gsm_mm gsm_sm gsm_cc lte_rrc glink hello_world
+MODS := gsm_mm gsm_sm gsm_cc lte_rrc nasot glink hello_world
 
 gsm_mm_SRC := fuzzers/gsm_mm.c afl.c
 gsm_cc_SRC := fuzzers/gsm_cc.c afl.c
 gsm_sm_SRC := fuzzers/gsm_sm.c afl.c
 lte_rrc_SRC := fuzzers/lte_rrc.c afl.c
+nasot_SRC := fuzzers/nasot.c fuzzers/nasot_symbols.c afl.c
 glink_SRC := glink.c
 hello_world_SRC := hello_world.c
 

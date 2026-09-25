@@ -108,11 +108,12 @@ class TaskMod(object):
         for sym in symtab.iter_symbols():
             # __SYMREQ_FUNC_<name>
             # __SYMREQ_DATA_<name>
+            # __SYMREQ_INST_<name>
             if sym.name.startswith("__SYMREQ_"):
                 sym_name = sym.name[len("__SYMREQ_") :]
                 sym_type = sym_name.split("_")[0]
 
-                if sym_type not in ["DATA", "FUNC"]:
+                if sym_type not in ["DATA", "FUNC", "INST"]:
                     raise ValueError(
                         "Unsupported symbol type %s from %s" % (sym_type, sym.name)
                     )
