@@ -52,85 +52,85 @@ int fuzz_single_setup()
 }
 void fuzz_single()
 {
-    uint32_t input_size;
-    uint16_t size;
-    MODEM_LOG("[+] Allocating Qitem\n");
+  uint32_t input_size;
+  uint16_t size;
+  MODEM_LOG("[+] Allocating Qitem\n");
+  
+  MODEM_LOG("[+] Getting Work\n");
+  char * buf = getWork(&input_size);
+  size = (uint16_t) input_size - 1;
+
+  MODEM_LOG("[+] Received n bytes: ");
+  uart_dump_hex((uint8_t *)buf, size); // Print some for testing
+
+  
+
+  uint16_t offset = 0x0;
+  uint16_t cur_msg_len = 0x0;
+
+  startWork(0, 0xffffffff); // memory range to collect coverage
+
+  while(offset + 3 < size)
+  {
     struct qitem_lte_rrc2 *item = pal_MemAlloc(4, sizeof(struct qitem_lte_rrc2), __FILE__, __LINE__);
     if (!item) {
       MODEM_LOG("ALLOC FAILED");
       return;
     }
-    MODEM_LOG("[+] Getting Work\n");
-    char * buf = getWork(&input_size);
-    size = (uint16_t) input_size - 1;
-
-    MODEM_LOG("[+] Received n bytes: ");
-    uart_dump_hex((uint8_t *)buf, size); // Print some for testing
-
-   
-
-    uint16_t offset = 0x0;
-    uint16_t cur_msg_len = 0x0;
-
-    startWork(0, 0xffffffff); // memory range to collect coverage
-
-    while(offset + 3 < size)
-    {
-       
-        char * asn_pl = pal_MemAlloc(4, size, __FILE__, __LINE__);
-        MODEM_LOG("[+] Filling the qitem\n");
-        
-        item->header.msgGroup = 0x0;
-        item->header.size = sizeof(struct qitem_lte_rrc2) - sizeof(struct qitem_header);
-        item->header.op = MSG_ID_LTE_PDCP_DATA_IND;
-
-        uint8_t channel = buf[offset] % 4;
-        offset += 1;
-        cur_msg_len = *(uint16_t*)(buf + offset);
-        offset += 2;
-
-        // Max size before size is forced reduced
-        if (cur_msg_len > 8188) {
-          break;
-        }
+    char * asn_pl = pal_MemAlloc(4, size, __FILE__, __LINE__);
     
-        item->pl_len = cur_msg_len; 
+    item->header.msgGroup = 0x0;
+    item->header.size = sizeof(struct qitem_lte_rrc2) - sizeof(struct qitem_header);
+    item->header.op = MSG_ID_LTE_PDCP_DATA_IND;
 
-        if(channel == 0){
-        //MCCH
-        item->rb_id = 0x16;
-        }
-        else if(channel == 1){
-        //DL_CCCH
-        item->rb_id = 0x0;
-        }
-        else if(channel == 2){
-        //DL_DCCH
-        item->rb_id = 0x2;
-        }
-        else{
-        //BCCH_DL_SCH
-        item->rb_id = 0x12;
-        }
+    uint8_t channel = buf[offset] % 4;
+    offset += 1;
+    cur_msg_len = *(uint16_t*)(buf + offset);
+    offset += 2;
 
-    
-        item->pduSecCheckComp = 0x0;
 
-        memcpy(asn_pl, buf+offset, cur_msg_len);
-        item->pl_ptr = asn_pl;
-    
-        pal_MsgSendTo(qid, item, 2);
-        
-        MODEM_LOG("[+] Setting Event\n");
-        uart_dump_hex((uint8_t *) group, 4);
-    
-        pal_SmSetEvent(&group, 0x10);
-    
-        MODEM_LOG("[+] Event set\n");
-        offset += cur_msg_len;
+    // Max size before size is forced reduced
+    if (cur_msg_len > 8188) {
+      break;
     }
 
-  
-    doneWork(0x0);
-    MODEM_LOG("[+] WorkDone\n");
+    item->pl_len = cur_msg_len; 
+
+    if(channel == 0){
+    //MCCH
+    item->rb_id = 0x16;
+    }
+    else if(channel == 1){
+    //DL_CCCH
+    item->rb_id = 0x0;
+    }
+    else if(channel == 2){
+    //DL_DCCH
+    item->rb_id = 0x2;
+    }
+    else{
+    //BCCH_DL_SCH
+    item->rb_id = 0x12;
+    }
+
+
+    item->pduSecCheckComp = 0x0;
+
+    memcpy(asn_pl, buf+offset, cur_msg_len);
+    item->pl_ptr = asn_pl;
+
+    pal_MsgSendTo(qid, item, 2);
+    
+    MODEM_LOG("[+] Setting Event\n");
+    uart_dump_hex((uint8_t *) group, 4);
+
+    pal_SmSetEvent(&group, 0x10);
+
+    MODEM_LOG("[+] Event set\n");
+    offset += cur_msg_len;
+  }
+
+
+  doneWork(0x0);
+  MODEM_LOG("[+] WorkDone\n");
 }
