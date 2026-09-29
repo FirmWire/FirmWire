@@ -59,15 +59,13 @@ struct pal_queue {
   uint32_t queueID;
 };
 
+#define EVENT_NAME_SIZE 8
+
+// Only the list links have a fixed layout across SoCs. The name sits at
+// SYM_EVENT_GROUP_NAME_OFFSET bytes from the start of the group.
 struct pal_event_group {
   struct pal_event_group * next;
   struct pal_event_group * prev;
-  unsigned char unk1;
-  void * unk2;
-  void * unk3;
-  char name[8];
-  void * unk4;
-  void * unk5;
 };
 
 
@@ -103,6 +101,9 @@ MODKIT_FUNCTION_SYMBOL(void, pal_MemFree, void *ptr, const char * szFile, unsign
 MODKIT_FUNCTION_SYMBOL(void, log_printf, LogContext *, ...)
 MODKIT_DATA_SYMBOL(struct pal_queue *, SYM_QUEUE_LIST)
 MODKIT_DATA_SYMBOL(struct pal_event_group **, SYM_EVENT_GROUP_LIST)
+// The event group list is circular: its last entry links back to the list head
+// variable itself, which acts as the sentinel. `name` offset varies per SoC.
+MODKIT_DATA_SYMBOL(uint32_t, SYM_EVENT_GROUP_NAME_OFFSET)
 
 // We need this symbol only for LTE RRC fuzzing. However, Symbol addition seem
 // only be working from here.

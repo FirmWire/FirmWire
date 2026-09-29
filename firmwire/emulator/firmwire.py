@@ -93,6 +93,11 @@ class FirmWireEmu(ABC):
         self.qemu.remove_breakpoint(bid)
         del self._bp_map[bid]
 
+    def remove_all_breakpoints(self):
+        """Remove every FirmWire breakpoint"""
+        for bid in list(self._bp_map):
+            self.remove_breakpoint(bid)
+
     def remove_breakpoint_by_address(self, address):
         """Remove all FirmWire breakpoints at an address"""
         to_remove = set([])
@@ -185,6 +190,17 @@ class FirmWireEmu(ABC):
 
             if not start_suspended:
                 if self._fuzzing is True:
+                    # The AFL forkserver forks the whole CPython process from
+                    # QEMU's iothread. Only that thread survives in the child,
+                    # so a callback back into Python deadlocks on the GIL mutex
+                    # it inherited locked.
+                    qemu.pypanda.disable_callback("__main_loop_wait", forever=True)
+
+                    # The GDB protocol is shut down below, so nothing would
+                    # service a breakpoint hit: the guest would stop dead in
+                    # RUN_STATE_DEBUG and the AFL child hang until its timeout.
+                    self.remove_all_breakpoints()
+
                     qemu.cont(blocking=False)
                     # if we are fuzzing with AFL, we don't want these threads to be running
                     qemu.protocols.monitor.shutdown()
