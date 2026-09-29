@@ -30,7 +30,7 @@ struct pal_event_group *eventid2addr(int32_t event_id) {
   struct pal_event_group *event = *SYM_EVENT_GROUP_LIST;
   int32_t i = 0;
 
-  while (event) {
+  while (event && event != (struct pal_event_group *)SYM_EVENT_GROUP_LIST) {
     if (event_id == i) {
       return event;
     }
@@ -41,17 +41,23 @@ struct pal_event_group *eventid2addr(int32_t event_id) {
   return NULL;
 }
 
-
+static const char *event_name(struct pal_event_group *event) {
+  return (const char *)event + SYM_EVENT_GROUP_NAME_OFFSET;
+}
 
 struct pal_event_group *eventname2addr(const char *name) {
   struct pal_event_group *event = *SYM_EVENT_GROUP_LIST;
 
-  while (event) {
-    if (strncmp(event->name, name, sizeof(event->name)-1) == 0)
+  while (event && event != (struct pal_event_group *)SYM_EVENT_GROUP_LIST) {
+    if (strncmp(event_name(event), name, EVENT_NAME_SIZE - 1) == 0)
       return event;
 
     event = event->next;
   }
+
+  uart_puts("ERROR: Unable to resolve event group ");
+  uart_puts((char *)name);
+  uart_putc('\n');
 
   return NULL;
 }

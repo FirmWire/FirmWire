@@ -998,3 +998,381 @@ def find_LteRrcBoolPrintLog(self, sym, data, offset):
     self.symbol_table.remove(sym.name)
     self.symbol_table.add(sym.name, new_address)
     return True
+
+
+def _function_start(data, site, span=0x40):
+    """Entry of the function containing `site`, i.e. the nearest `push` before it."""
+    for i in range(0, span, 2):
+        fn = site - i
+        if data[fn + 1] in (0xB4, 0xB5) or data[fn : fn + 2] == b"\x2d\xe9":
+            return fn
+
+    return None
+
+
+def _branch_target_at(data, offset, insn_off, link=True):
+    # wide Thumb branch: hw1 = 11110 S imm10; hw2 bit14 set for BL, clear for B.W
+    insn = struct.unpack("<I", data[insn_off : insn_off + 4])[0]
+    if insn & 0xF800 != 0xF000:
+        return None
+    if (insn >> 16) & 0xD000 != (0xD000 if link else 0x9000):
+        return None
+    return decode_thumb_bl_target(insn, offset + insn_off)
+
+
+def _encode_movw_movt(value, rd):
+    out = []
+    for op, imm16 in ((0xF240, value & 0xFFFF), (0xF2C0, (value >> 16) & 0xFFFF)):
+        hw1 = op | (((imm16 >> 11) & 1) << 10) | ((imm16 >> 12) & 0xF)
+        hw2 = (((imm16 >> 8) & 7) << 12) | (rd << 8) | (imm16 & 0xFF)
+        out += [struct.pack("<HH", hw1, hw2)]
+    return out
+
+
+def _find_movw_movt(data, value, gap=0x14):
+    """Sites building `value` with a movw/movt pair, which need not be adjacent."""
+    sites = []
+
+    for rd in range(8):
+        movw, movt = _encode_movw_movt(value, rd)
+        bp = BinaryPattern("movw")
+        bp.from_str(movw)
+        for loc in bp.findall(data):
+            if movt in bytes(data[loc[0] + 4 : loc[0] + 4 + gap]):
+                sites += [loc[0]]
+
+    return sites
+
+
+def _find_trace_entries(data, offset, needle, reject=None):
+    """TraceEntry structs whose message string contains `needle` (see shannon.h)."""
+    bp = BinaryPattern("trace_string")
+    bp.from_str(needle)
+
+    entries = []
+    for loc in bp.findall(data):
+        start = loc[0]
+        while start > 0 and data[start - 1] != 0:
+            start -= 1
+        if reject is not None and reject in bytes(data[start : loc[0]]):
+            continue
+
+        bp_ptr = BinaryPattern("trace_ptr")
+        bp_ptr.from_str(struct.pack("<I", offset + start))
+        entries += [offset + p[0] - 0x10 for p in bp_ptr.findall(data)]
+
+    return entries
+
+
+def _find_handler_registration(data, offset, needle, reject=None):
+    """Entry of a message handler plus the code sites that load it for registration.
+
+    The handler is reached through its first log line rather than an xref: the
+    trace string gives a TraceEntry, the movw/movt pair materialising that entry
+    sits a prologue away from the function start, and the registration site is
+    wherever that start (Thumb, so |1) is itself materialised.
+    """
+    for entry in _find_trace_entries(data, offset, needle, reject):
+        for site in _find_movw_movt(data, entry):
+            for prologue in range(2, 0x40, 2):
+                fn = site - prologue
+                if data[fn + 1] not in (0xB4, 0xB5) and data[fn : fn + 2] != b"\x2d\xe9":
+                    continue
+                sites = _find_movw_movt(data, offset + fn + 1)
+                if sites:
+                    return offset + fn, sites
+
+    return None, []
+
+
+def _movw_movt_value_before(data, loc, rd, span=0x400):
+    """Value of the last movw/movt pair written to `rd` before `loc`.
+
+    A `mov rd, rn` on the way is followed, because S5123AP builds the base id in
+    a low register and parks it in the one the entries index off.
+    """
+    high = None
+
+    for i in range(2, span, 2):
+        insn = struct.unpack("<I", data[loc - i : loc - i + 4])[0]
+        hw = insn & 0xFFFF
+
+        if high is None and hw & 0xFF00 == 0x4600:  # mov rd, rn
+            if (((hw >> 4) & 8) | (hw & 7)) == rd:
+                rd = (hw >> 3) & 0xF
+            continue
+
+        if (insn >> 24) & 0xF != rd:
+            continue
+        if high is None and insn & 0xFBF0 == 0xF2C0:
+            high = decode_movw(insn)
+        elif high is not None and insn & 0xFBF0 == 0xF240:
+            return (high << 16) | decode_movw(insn)
+
+    return None
+
+
+def _msg_id_near(data, offset, loc, window=0x40, gap=0x14):
+    """Message id built near `loc`.
+
+    Registration code keeps a base id in a register and reaches each entry with
+    a displacement, so both a plain movw/movt pair and `add rd,rn,#imm` have to
+    be resolved. Message ids sit below the section load address, which is what
+    separates them from the handler pointers loaded by the same code.
+    """
+    for i in range(0, window, 2):
+        insn = struct.unpack("<I", data[loc + i : loc + i + 4])[0]
+        hw1 = insn & 0xFFFF
+        imm12 = (((hw1 >> 10) & 1) << 11) | (((insn >> 28) & 7) << 8) | ((insn >> 16) & 0xFF)
+        value = None
+
+        if hw1 & 0xFBE0 == 0xF100:  # add rd, rn, #imm (T3)
+            base = _movw_movt_value_before(data, loc + i, hw1 & 0xF)
+            if base is not None:
+                value = base + thumb_expand_imm(imm12)
+        elif hw1 & 0xFBF0 == 0xF200:  # addw rd, rn, #imm12 (T4)
+            base = _movw_movt_value_before(data, loc + i, hw1 & 0xF)
+            if base is not None:
+                value = base + imm12
+        elif hw1 & 0xFBF0 == 0xF2C0:  # movt rd
+            rd = (insn >> 24) & 0xF
+            for j in range(2, gap, 2):
+                prev = struct.unpack("<I", data[loc + i - j : loc + i - j + 4])[0]
+                if prev & 0xFBF0 == 0xF240 and (prev >> 24) & 0xF == rd:
+                    value = (decode_movw(insn) << 16) | decode_movw(prev)
+                    break
+                if prev & 0xF800 == 0x2000 and (prev >> 8) & 7 == rd:
+                    value = (decode_movw(insn) << 16) | (prev & 0xFF)
+                    break
+            adds = struct.unpack("<H", data[loc + i + 4 : loc + i + 6])[0]
+            if value is not None and adds & 0xF800 == 0x3000 and (adds >> 8) & 7 == rd:
+                value += adds & 0xFF
+
+        if value is not None and 0x400000 <= value < offset:
+            return value
+
+    return None
+
+
+def find_msg_id_mm_rrc_data_ind(data, offset):
+    """MM_RRC_DATA_IND message id: dst_ft << 22 | src_ft << 12 | msg_num.
+
+    Read from the handler registration, which stores the handler pointer and
+    then the id it is registered under.
+    """
+    handler, sites = _find_handler_registration(
+        data, offset, b"MM_RRC_DATA_IND_Handler\x00", reject=b"MmFt"
+    )
+    assert handler is not None, "Failed to find the MM_RRC_DATA_IND handler"
+
+    found = {v for v in (_msg_id_near(data, offset, s) for s in sites) if v is not None}
+    assert len(found) == 1, f"Conflicting message ids {sorted(map(hex, found))}"
+
+    log.info("MM_RRC_DATA_IND handler at %#010x", handler)
+    return found.pop()
+
+
+def find_smpf_create_msg(data, offset):
+    # inlined template, so one identical copy per 0x48 byte message class; the
+    # message id is a parameter, so any copy serves
+    bp = BinaryPattern("smpf_CreateMsg")
+    bp.from_hex(
+        "f0b5 81b0 0c46 ???????? 0546 4820 ??22 0023 0026 ???????? "
+        "???????? 0746 ??b1 3846 2946 4822 ???????? 07f12c06 3c61 3046 01b0 f0bd"
+    )
+
+    loc = bp.find(data)
+    assert loc is not None, "Failed to find smpf_CreateMsg"
+    return offset + loc[0]
+
+
+def find_smpf_mem_alloc(data, offset):
+    # several byte-identical copies exist; take the one smpf_CreateMsg calls
+    create = find_smpf_create_msg(data, offset) - offset
+    target = _branch_target_at(data, offset, create + 0x18)
+    assert target is not None, "No BL at smpf_CreateMsg+0x18"
+    return target
+
+
+def _find_sendmsg_task_check(data):
+    """The `if (SMPF_TASK_CREATED)` guard at the top of SendMsg__'s body.
+
+    Anchored on the body rather than on the function entry, because S5123AP
+    builds SendMsg__ with a stack cookie prologue (an extra movw/movt pair and
+    a wider push) that S5123 does not have. Everything from this guard on is
+    byte identical on both, the two immediates aside.
+    """
+    bp = BinaryPattern("SendMsg__")
+    bp.from_hex(
+        "a068 10f4007f ??d1 ???????? ???????? "
+        "0978 0029 ??d0 617b 4029 01d3 0021 6173"
+    )
+
+    locs = bp.findall(data)
+    assert (
+        len(locs) == 1
+    ), f"Found more than one instance or failed to find any ({len(locs)})"
+
+    return locs[0][0]
+
+
+def find_smpf_send_msg(data, offset):
+    bp = BinaryPattern("smpf_SendMsg")
+    bp.from_hex(
+        "58b1 10f82b2c a0f12c01 1207 02d5 0622 00f80c2c 0846 ???????? 1f20 7047"
+    )
+
+    locs = bp.findall(data)
+    assert (
+        len(locs) == 1
+    ), f"Found more than one instance or failed to find any ({len(locs)})"
+
+    loc = locs[0][0]
+    target = _branch_target_at(data, offset, loc + 0x16, link=False)
+    expected = offset + _function_start(data, _find_sendmsg_task_check(data))
+    assert (
+        target == expected
+    ), f"Tail call goes to {target:#010x}, SendMsg__ is at {expected:#010x}"
+
+    return offset + loc
+
+
+def find_smpf_task_created(data, offset):
+    # the flag the guard loads, built by the movw/movt pair inside it
+    loc = _find_sendmsg_task_check(data)
+    addr_w = decode_movw(struct.unpack("<I", data[loc + 8 : loc + 12])[0])
+    addr_t = decode_movw(struct.unpack("<I", data[loc + 12 : loc + 16])[0])
+
+    return (addr_t << 16) | addr_w
+
+
+def find_fake_test_assist_get_instance(data, offset):
+    """Lazy getter for the MM fake test assist singleton.
+
+    smpf_MemAlloc call sites pass __FILE__, so the sole reference to
+    cn_MmFakeTestUtil.hpp's path string is the getter's own allocation, which
+    sits a fixed prologue past the function start.
+    """
+    bp = BinaryPattern("cn_MmFakeTestUtil.hpp")
+    bp.from_str(b"cn_MmFakeTestUtil.hpp\x00")
+
+    sites = []
+    for loc in bp.findall(data):
+        start = loc[0]
+        while start > 0 and data[start - 1] != 0:
+            start -= 1
+        sites += _find_movw_movt(data, offset + start)
+
+    assert (
+        len(sites) == 1
+    ), f"Expected one reference to cn_MmFakeTestUtil.hpp, found {len(sites)}"
+
+    fn = sites[0] - 0x10
+    prologue = BinaryPattern("FakeTestAssist_GetInstance")
+    prologue.from_hex("10b5 ???????? ???????? 2068 00b1 10bd")
+    assert (
+        prologue.find(data[fn : sites[0]]) is not None
+    ), f"Unexpected getter prologue at {offset + fn:#010x}"
+
+    return offset + fn
+
+
+def _word_refs(data, offset, value):
+    """Aligned words holding `value`, the closest thing to an xref we have."""
+    bp = BinaryPattern("word")
+    bp.from_str(struct.pack("<I", value))
+
+    return [offset + loc[0] for loc in bp.findall(data) if loc[0] % 4 == 0]
+
+
+def _find_cxx_vtable(data, offset, cxx_class):
+    """Vtable of a C++ class, reached through its RTTI type_info.
+
+    The images keep Itanium ABI RTTI, where type_info holds a pointer to the
+    mangled class name at +4 and the vtable holds a pointer to the type_info at
+    +4. Two word searches therefore walk name -> type_info -> vtable without
+    needing xrefs. Mangled names are readable enough to grep for in Ghidra's
+    string list ("N2cn2mm10NrmmFacadeE" is cn::mm::NrmmFacade).
+    """
+    bp = BinaryPattern(cxx_class)
+    bp.from_str(cxx_class.encode() + b"\x00")
+
+    vtables = set()
+    for loc in bp.findall(data):
+        for name_ref in _word_refs(data, offset, offset + loc[0]):
+            for typeinfo_ref in _word_refs(data, offset, name_ref - 4):
+                vtables.add(typeinfo_ref - 4)
+
+    assert (
+        len(vtables) == 1
+    ), f"Expected one vtable for {cxx_class}, found {sorted(map(hex, vtables))}"
+
+    return vtables.pop()
+
+
+def _cxx_vtable_slot(data, offset, vtable, slot):
+    """Method in a vtable slot. Slots start at vtable+8, past offset_to_top and
+    the type_info pointer, so vtable+8 is also the value objects store."""
+    loc = vtable + 8 + 4 * slot - offset
+
+    return struct.unpack("<I", data[loc : loc + 4])[0] & ~1
+
+
+def _find_cxx_ctor(data, offset, vtable):
+    """Constructor, from the code installing the vtable pointer.
+
+    Objects get their vptr written as `movw/movt rd, <vtable>; adds rd, #8`, so
+    it is the vtable base that appears in code. The destructors reinstall the
+    vptr the same way, which makes the constructor the one such site that is
+    not itself a vtable entry.
+    """
+    slots = {_cxx_vtable_slot(data, offset, vtable, i) for i in range(64)}
+    ctors = set()
+
+    for site in _find_movw_movt(data, vtable):
+        fn = _function_start(data, site, span=12)
+        if fn is not None and offset + fn not in slots:
+            ctors.add(offset + fn)
+
+    assert (
+        len(ctors) == 1
+    ), f"Expected one constructor for vtable {vtable:#010x}, found {sorted(map(hex, ctors))}"
+
+    return ctors.pop()
+
+
+def cxx_vtable(cxx_class):
+    def lookup(data, offset):
+        return _find_cxx_vtable(data, offset, cxx_class)
+
+    return lookup
+
+
+def cxx_ctor(cxx_class):
+    def lookup(data, offset):
+        return _find_cxx_ctor(data, offset, _find_cxx_vtable(data, offset, cxx_class))
+
+    return lookup
+
+
+def cxx_vmethod(cxx_class, slot, prologue):
+    """Virtual method by slot index, confirmed by the method's own prologue.
+
+    Slot indices are only stable within a firmware generation, so `prologue`
+    guards against a vtable layout change silently returning the wrong method.
+    """
+
+    def lookup(data, offset):
+        vtable = _find_cxx_vtable(data, offset, cxx_class)
+        addr = _cxx_vtable_slot(data, offset, vtable, slot)
+
+        bp = BinaryPattern(f"{cxx_class}+{slot}")
+        bp.from_hex(prologue)
+        loc = bp.find(data, pos=addr - offset, maxpos=addr - offset + 0x40)
+        assert (
+            loc is not None and loc[0] == addr - offset
+        ), f"Slot {slot} of {cxx_class} ({addr:#010x}) does not match its expected prologue"
+
+        return addr
+
+    return lookup

@@ -19,6 +19,11 @@ from avatar2 import *
 import firmwire.vendor.shannon.task
 
 from firmwire.vendor.shannon.modkit import TaskMod, NOP_TASK_SNIPPET
+from firmwire.vendor.shannon.cxx_instance import (
+    MACHINE_STATE_KEY,
+    WAY_METHOD,
+    CxxInstanceResolver,
+)
 from firmwire.emulator.firmwire import FirmWireEmu
 
 from firmwire.util.BinaryPattern import BinaryPattern
@@ -47,6 +52,7 @@ class ShannonMachine(FirmWireEmu, ShannonOSI):
         self.ports = {}
         self._fuzzing = False
         self.packet_log = None
+        self.cxx_instances = CxxInstanceResolver(self)
 
     def pal_msg_logging_enable(self, log_file):
         if log_file == "-":
@@ -532,7 +538,24 @@ r12: %08x     cpsr: %08x""" % (
             log.error("SoC quirk error")
             return False
 
+        self.cxx_instances.install_breakpoints()
+
         return True
+
+    def pre_snapshot_handler(self, snapshot_name):
+        return {MACHINE_STATE_KEY: self.cxx_instances.snapshot_state()}
+
+    def post_snapshot_restore_handler(
+        self, snapshot_name, snapshot_metadata, machine_state
+    ):
+        super().post_snapshot_restore_handler(
+            snapshot_name, snapshot_metadata, machine_state
+        )
+
+        self.cxx_instances.load_snapshot_state(machine_state.get(MACHINE_STATE_KEY))
+        # the constructors ran long ago, but a method taking `this` still gets
+        # called and can confirm what the snapshot recorded
+        self.cxx_instances.install_breakpoints(ways=(WAY_METHOD,))
 
     def load_task_module(self, name):
         module = self.modkit.find_module(name)
@@ -691,6 +714,11 @@ r12: %08x     cpsr: %08x""" % (
 
         # perform dynamic linking to baseband symbols and functions
         for sym_name, kw in task.symbols.items():
+            if kw["type"] == "INST":
+                if not self.cxx_instances.request(sym_name, kw["write_address"]):
+                    return False
+                continue
+
             sym = self.symbol_table.lookup(sym_name, single=True)
 
             if sym is None:
@@ -848,7 +876,10 @@ r12: %08x     cpsr: %08x""" % (
 
                 main_task_counter = self.symbol_table.lookup("main_task_counter").address
 
-                from firmwire.vendor.shannon.hooks import warm_boot_change, protect_write_access
+                from firmwire.vendor.shannon.hooks import (
+                    warm_boot_change,
+                    protect_write_access,
+                )
                 new_mem_mappings = [
                     {
                         "start": 0x40008000 | 0x70000000 >> 0x12,
@@ -886,7 +917,10 @@ r12: %08x     cpsr: %08x""" % (
             )
 
         elif self.modem_soc.name == "S5123":
-            from firmwire.vendor.shannon.hooks import warm_boot_change, protect_write_access
+            from firmwire.vendor.shannon.hooks import (
+                warm_boot_change,
+                protect_write_access,
+            )
             new_mappings = [
                 {
                     "name": "warm_boot_change",
