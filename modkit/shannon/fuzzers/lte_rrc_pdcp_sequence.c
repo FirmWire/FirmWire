@@ -58,7 +58,7 @@ void fuzz_single()
   
   MODEM_LOG("[+] Getting Work\n");
   char * buf = getWork(&input_size);
-  size = (uint16_t) input_size - 1;
+  size = (uint16_t) input_size;
 
   MODEM_LOG("[+] Received n bytes: ");
   uart_dump_hex((uint8_t *)buf, size); // Print some for testing
@@ -77,7 +77,6 @@ void fuzz_single()
       MODEM_LOG("ALLOC FAILED");
       return;
     }
-    char * asn_pl = pal_MemAlloc(4, size, __FILE__, __LINE__);
     
     item->header.msgGroup = 0x0;
     item->header.size = sizeof(struct qitem_lte_rrc2) - sizeof(struct qitem_header);
@@ -88,6 +87,7 @@ void fuzz_single()
     cur_msg_len = *(uint16_t*)(buf + offset);
     offset += 2;
 
+    char * asn_pl = pal_MemAlloc(4, cur_msg_len, __FILE__, __LINE__);
 
     // Max size before size is forced reduced
     if (cur_msg_len > 8188) {
