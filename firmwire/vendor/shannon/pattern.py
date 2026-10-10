@@ -221,6 +221,12 @@ PATTERNS_CORTEX_R = {
             "25 6a 01 26 00 2d ?? d0 ?? 46 ???????? 94 f8 2d 10 ?? 4b 61 b1 01 29 01 d0 1d 46 1c e0"
         ],
     },
+    "SYM_INIT_QUEUS": {
+        "pattern": [
+            "10 b5 40 f2 26 20 ?? ?? ?? 23 ?? ?? ?? ?? ?? ?? 60 60 01 20 ?? ?? ?? ?? 00 28 20 60 ?? ?? 62 68 00 21 00 2a 88 bf 00 22"
+        ],
+        "post_lookup": handlers.find_queues,
+    },
 }
 
 PATTERNS_CORTEX_A = {
@@ -391,5 +397,11 @@ PATTERNS_CORTEX_A = {
         "post_lookup": handlers.get_phy_ipc_c2p_ring_base_inline,
         "required": False,
         "soc_match": ["S5123"],
+    },
+    "MSG_ID_LTE_PDCP_DATA_IND" : {
+        "lookup": lambda data, offset: 0x0,
+    },
+    "MSG_ID_LTE_PDCP_DATA_REQ" : {
+        "lookup": lambda data, offset: 0x0,
     },
 }

@@ -812,14 +812,14 @@ def find_msg_id_lte_pdcp_data_req(data, offset):
 
 
     # LTE_PDCP_DATA_REQ strings
-    locs = [l[0] for l in bp.findall(data)]
+    locs = [l[0] + offset for l in bp.findall(data)]
     llocs += locs
 
     # pointers to string
 
     for l in locs:
         bp_x = BinaryPattern("xref")
-        bp_x.from_str(struct.pack("I", l+offset))
+        bp_x.from_str(struct.pack("I", l))
         rez = bp_x.findall(data, maxresults=10)
         for r in rez:
             llocs.append(r[0])
@@ -992,9 +992,85 @@ def find_LteRrcBoolPrintLog(self, sym, data, offset):
     if(ins >> 8 != 0x4a):
         return False
 
-    maddr = sym.address + 2 + (ins & 0xff) * 4
+    maddr = (sym.address + 4 + (ins & 0xff) * 4) & ~3
     moffset = maddr - offset
     new_address = int.from_bytes(data[moffset:moffset+4], "little")
     self.symbol_table.remove(sym.name)
     self.symbol_table.add(sym.name, new_address)
+    return True
+
+
+def find_static_load(fn_code, code, mnem, pattern):
+
+    thumb_offset = 2
+    arch = Cs(CS_ARCH_ARM, CS_MODE_THUMB)
+
+
+    re_pattern = re.compile(pattern)
+    res = []
+    ins = []
+    
+    for (address, size, mnemonic, op_str) in arch.disasm_lite(code, 0):
+        ins.append((fn_code+address, mnemonic, op_str))
+        if(mnemonic == mnem):
+            r = re.match(re_pattern, op_str)
+            if(r != None):
+                ops = op_str.split(", ")
+                if(len(ops) == 2):
+                    offset = 0
+                else:
+                    offset = int(ops[2].strip("[#]\n"), 16)
+                    
+                source_reg = ops[0]
+                target_reg = ops[1].strip("[#]\n")
+ 
+                taint_reg = target_reg
+                back_offset = 0
+                target = 0
+                last_addr = 0
+                for(ins_addr, mnem_back, op_str_back) in ins[::-1]:
+                    if(taint_reg in op_str_back):
+                        if(mnem_back == "ldr"):
+                            ops = op_str_back.split(", ")
+                            if(taint_reg == ops[0]):
+                                if(len(ops) == 3):
+                                    back_offset += int(ops[2].strip("[#]\n"), 16)
+                                if(len(ops) > 3):
+                                    print("Decompile error")
+                                    return False
+                                dst_reg = ops[1].strip("[")
+                                if(dst_reg == "pc"):
+                                    target = ins_addr + back_offset + abs(ins_addr - last_addr)
+                                    res.append((source_reg, target_reg, offset, target))  #pc already updated
+                                    break
+                                else:
+                                    taint_reg = dst_reg
+                    last_addr = ins_addr
+
+                
+        if(mnemonic == "b" or mnemonic == "bl" or mnemonic == "blx" or mnemonic == "bx"):
+            #branch may switch instruction set
+            target = int(op_str.strip("#\n"), 16)
+            if(target & 1 != 0):
+                thumb_offset = 2
+            else:
+                thumb_offset = 4
+
+    return res
+
+
+def find_queues(self, sym, d, o):
+    # Look for 2 STR operations, one of them at base (+0x0) and the other one at +0x4
+
+    main_toc = self.modem_file.get_section("MAIN")
+    offset = sym.address - main_toc.load_address
+    data = main_toc.data
+    code_len = 100
+
+    pattern = "r[0-c], \[r[0-c](, #(0x)?[0-f]+)?\]"
+
+    store_ops = find_static_load(sym.address, data[offset:offset+code_len], "str", pattern)[0][3]
+    symbol_addr = int.from_bytes(data[store_ops-main_toc.load_address:store_ops-main_toc.load_address+4], "little")
+    self.symbol_table.remove(sym.name)
+    self.symbol_table.add(sym.name, symbol_addr)
     return True

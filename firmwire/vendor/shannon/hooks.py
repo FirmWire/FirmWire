@@ -547,7 +547,7 @@ def protect_write_access(self, cpustate, memory_access_desc, label=None, const_v
     format = NUM2FMT[acc_size]
     (value,) = struct.unpack(format, panda.virtual_memory_read(cpustate, addr, acc_size))
     value = const_value
-    panda.physical_memory_write(addr, struct.pack("<I", value))
+    panda.physical_memory_write(addr, struct.pack(format, value))
     offset = addr - memory_access_desc.hook.start_address
     log_emit(
         self, cpustate,

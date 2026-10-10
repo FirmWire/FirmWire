@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 import time
+import fcntl
 
 import firmwire.vendor.shannon as shannon
 import firmwire.vendor.shannon.lte.soc
@@ -577,7 +578,36 @@ r12: %08x     cpsr: %08x""" % (
             task_struct_addr, self.task_layout, raw_bytes=task_struct_data
         )
 
-        nulltask.main_fn = bxlr | 0x1  # force thumb mode
+        new_main = bxlr
+
+        if(self.is_memory_dump_enabled() and self.get_task_list()[idx].name == "UDATA"):
+            """ For S360 and S337AP images the UDATA task is disabled
+                , but the firmware is still able to send events to the
+                disabled UDATA task, crashing the baseband. In this case
+                fallback to the old implementation calling pal_Sleep """
+
+            sym = self.symbol_table.lookup("pal_Sleep")
+
+            if not sym:
+                log.error("Unable to disable task without pal_Sleep symbol")
+                return False
+
+            if self.nop_task_address is None:
+                self.nop_task_address = self.playground.begin + 0x4000
+                log.info("Creating NOP task at 0x%08x", self.nop_task_address)
+
+                pal_sleep = sym.address | 1
+                nop_bytes = self.qemu.assemble(
+                    NOP_TASK_SNIPPET.format(pal_sleep), addr=self.nop_task_address
+                )
+                self.qemu.write_memory(
+                    self.nop_task_address, 1, nop_bytes, len(nop_bytes), raw=True
+                )
+
+            new_main = self.nop_task_address
+
+
+        nulltask.main_fn = new_main | 0x1  # force thumb mode
         nulltask.pre_fn = 0  # zero disables this from being called
 
         self.qemu.wm(task_struct_addr, len(nulltask.data), nulltask.data, raw=True)
@@ -840,7 +870,6 @@ r12: %08x     cpsr: %08x""" % (
             )
 
         disable_list = []
-
         if self.modem_soc.name in ("S5000AP", "S5123AP", "S5133AP"):
             if self.modem_soc.name == "S5123AP":
                 self.set_breakpoint(
@@ -1023,6 +1052,7 @@ r12: %08x     cpsr: %08x""" % (
             disable_list += ["UDATA"]  # Rabm timer NULL
             disable_list += ["SHM"]  # takes a ton of CPU time
             disable_list += ["SIM_SAP"]  # hangs when initing DS_SIM
+            disable_list += ["VSUP"] # hangs during boot
 
         task_id_by_name = {
             name: i for i, name in enumerate([t.name for t in self.get_task_list()])
@@ -1066,25 +1096,163 @@ r12: %08x     cpsr: %08x""" % (
             temporary=True
         )
 
+
     def restore_memory_dump(self):
         log.info("Restoring memory dump")
         count = 0
+        if str(os.environ.get("ENABLE_MEMORY_TRACING", 0)) == '1':
+            fcntl.fcntl(sys.stdout.fileno(), fcntl.F_SETFL, 0)  # remove non-block
+            self.memory_tracing_enabled = 1
+        else:
+            self.memory_tracing_enabled = 0
+
         for (addr, size) in self.get_mem_dump_addrs():
             buf = self._shannon_memory_dump.get(addr, size)
             if buf is None:
                 continue
-
             self.qemu.pypanda.physical_memory_write(addr, buf)
+            # Make sure that these are not considered as new memory accesses
+            # by filtering out accesses that are written before the first read
+            if str(os.environ.get("ENABLE_MEMORY_TRACING", 0)) == '1':
+                obj = {"addr": addr, "length": size, "pc": 0x0, "ra": 0x0, "sp": 0x0, "fn": 0x0, "fn_ra": 0x0}
+                sys.stdout.write(f"\nMEM_WRITE: {json.dumps(obj)}\n")
+                sys.stdout.flush()
+
             count += 1
             if count % 500 == 0:
                 log.debug(f"Restored {count} chunks from memory dump...")
         log.info(f"Memory dump recovery completed, restored {count} chunks")
-        self.memory_tracing_enabled = str(os.environ.get("ENABLE_MEMORY_TRACING", 0)) == '1'
-
-        self.disable_write_to_logging_global()
+       
+        if(not self._fuzzing):
+            self.disable_write_to_logging_global()
         self.disable_known_roadblocks()
 
+        # This should be called after the snapshot has been restored (if using a snapshot)
+        path = f"{self.get_memory_dump_file_path()}_metadata.txt"
+        if(os.path.isfile(path) is False):
+            if(not self.collect_metadata(path)):
+                log.warning("Collect metadata failed!")
 
+    
+    def collect_metadata(self, path):
+        all_metadata_found = True
+        # init queue
+        init_queues = self.symbol_table.lookup("SYM_INIT_QUEUS")
+
+        if(init_queues is None):
+            log.warning("Cannot collect metadata, SYM_INIT_QUEUS pattern not found")
+            all_metadata_found = False
+        else:
+            init_queues = init_queues.address
+            init_queues_ptr = int.from_bytes(self.qemu.pypanda.physical_memory_read(init_queues, 4), "little")
+
+            init_queues_size = int.from_bytes(self.qemu.pypanda.physical_memory_read(init_queues_ptr-0x20+0x4, 4), "little")
+            self._shannon_memory_dump.metadata["SYM_INIT_QUEUS"] = [
+                {"start" : init_queues, "end": init_queues + 4},
+                {"start" : init_queues_ptr, "end" : init_queues_ptr+init_queues_size}
+            ]
+
+        #OS queue memory
+        queue_list = self.symbol_table.lookup("SYM_QUEUE_LIST")
+
+        if(queue_list is None):
+            log.warning("Cannot collect metadata, SYM_QUEUE_LIST pattern not found")
+            all_metadata_found = False
+        else:
+            queue_list = queue_list.address
+        
+            N = 0
+            j = 0
+            name_ptr =  self._shannon_memory_dump.restore_start
+            q_size = 20
+            while(name_ptr >=  self._shannon_memory_dump.restore_start and name_ptr <  self._shannon_memory_dump.restore_end):
+                q_memory = self.qemu.pypanda.physical_memory_read(queue_list + j, q_size)
+                name_ptr = int.from_bytes(q_memory[:4], "little")
+                j+=q_size
+                N+=1
+
+            self._shannon_memory_dump.metadata["SYM_QUEUE_LIST"] = [{"start" : queue_list, "end" : queue_list + N * q_size}]
+
+        # event memory
+        event_lst = self.symbol_table.lookup("SYM_EVENT_GROUP_LIST")
+
+        if(event_lst is None):
+            log.warning("Cannot collect metadata, SYM_EVENT_GROUP_LIST pattern not found")
+            all_metadata_found = False
+        else:
+            event_lst = event_lst.address
+        
+            event_size = 36 
+            event = self.qemu.read_memory(event_lst, 4)
+            self._shannon_memory_dump.metadata["SYM_EVENT_GROUP_LIST"] = [{"start" : event_lst, "end" : event_lst + 4}]
+            visited = []
+            while(event not in visited):
+                self._shannon_memory_dump.metadata["SYM_EVENT_GROUP_LIST"].append({"start" : event, "end" : event + event_size})
+                visited.append(event)
+
+                event = self.qemu.read_memory(event, 4)
+
+            start = self._shannon_memory_dump.restore_start
+            end = self._shannon_memory_dump.restore_end
+
+            # This may take some time
+            for addr in range(start, end, 4):
+                val = int.from_bytes(self.qemu.pypanda.physical_memory_read(addr, 4), "little")
+                if(val in visited):
+                    self._shannon_memory_dump.metadata["SYM_EVENT_GROUP_LIST"].append({"start" : addr, "end" : addr + 4})
+        
+        # sched task memory
+        schedulable_task_list = self.symbol_table.lookup("SYM_SCHEDULABLE_TASK_LIST")
+
+        if(schedulable_task_list is None):
+            log.warning("Cannot collect metadata, SYM_SCHEDULABLE_TASK_LIST pattern not found")
+            all_metadata_found = False
+        else:
+            schedulable_task_list = schedulable_task_list.address
+    
+            # priority bits
+            self._shannon_memory_dump.metadata["SYM_SCHEDULABLE_TASK_LIST"] = [{"start" : schedulable_task_list - (schedulable_task_list % 0x100) - 0x100, "end" : schedulable_task_list}]
+            task_size = 100 
+            stack_top_offset = 40
+            self._shannon_memory_dump.metadata["SYM_SCHEDULABLE_TASK_LIST"].append({"start" : schedulable_task_list, "end" : schedulable_task_list+ 0x420 * 4})
+            self._shannon_memory_dump.metadata["STACK"] = []
+            collect_stack = True
+
+            for j in range(1, 0x420, 2):
+                ptr = self.qemu.read_memory(schedulable_task_list + (j*4), 4)
+
+                if(ptr < start or ptr >= end):
+                    continue
+                    #break
+                
+                t = self.qemu.pypanda.physical_memory_read(ptr, task_size)
+                
+                stack_top = int.from_bytes(t[stack_top_offset:stack_top_offset+4], 'little')
+                stack_base = int.from_bytes(t[stack_top_offset+4:stack_top_offset+8], 'little')
+
+                self._shannon_memory_dump.metadata["SYM_SCHEDULABLE_TASK_LIST"].append({"start" : ptr, "end" : ptr + task_size})
+
+
+                if((stack_base == 0) or (stack_top == 0)):
+                    collect_stack = False
+                    continue
+                    
+                self._shannon_memory_dump.metadata["STACK"].append({"start" : stack_base, "end" : stack_top})
+
+        
+
+            if(collect_stack is False):
+                # Apparently there was some task that did not have a task base
+                # so we cannot use this information
+                log.warning("Cannot collect stack metadata, continue without")
+                del(self._shannon_memory_dump.metadata["STACK"])
+
+
+        # Uncomment for debugging purposes
+        log.info("Dumping metadata!!!")
+        # self._shannon_memory_dump.print_metadata()
+        self._shannon_memory_dump.dump_metadata_to_file(path)
+        return all_metadata_found
     # Overwriting large chunks can be a bit buggy, so write in chunks
 
     def write_in_chunks(self, begin, end, binary):
@@ -1125,11 +1293,13 @@ r12: %08x     cpsr: %08x""" % (
         self.function_memory_access = {'r': [], 'w': []}
 
         self.disable_known_timers()
-        self.disable_write_to_logging_global()
+        if(not self.is_memory_dump_enabled()):
+            # if True, it is already set by restore_memory_dump
+            if(not self._fuzzing):
+                self.disable_write_to_logging_global()
+            self.disable_known_roadblocks()
 
-        self.disable_known_roadblocks()
-
-
+        
         @self.qemu.pypanda.cb_phys_mem_before_write
         def mem_before_write(env, pc, addr, size, buf):
             if not self.memory_tracing_enabled:
@@ -1492,7 +1662,6 @@ r12: %08x     cpsr: %08x""" % (
             log.debug("Cannot find pattern LteRrcBoolPrintLog, some debug logs might be missing")
 
         else:
-
             self.install_mem_hooks(
                 [
                     {
@@ -1515,3 +1684,18 @@ r12: %08x     cpsr: %08x""" % (
             log.error("Cannot find symbol %s, not disabling it" % sym_name)
         else:
             self.qemu.pypanda.physical_memory_write(sym.address, bt)
+    
+    def post_snapshot_handler(self, snapshot_name):
+        # Collect at point of snapshot
+        if(self.is_memory_dump_enabled()):
+            path = f"{self.get_memory_dump_file_path()}_metadata.txt"
+            if(os.path.isfile(path)):
+
+                """ This depends on the emulator and not the (static) dump.
+                For example: The heap layout may differ, hence we want to
+                redo this for every snapshot """
+
+                log.warning(f"Removing previous metadata file at {path}")
+                os.remove(path)
+            if(not(self.collect_metadata(path))):
+                log.warning("Collect metadata failed!")

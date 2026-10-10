@@ -1,7 +1,8 @@
-import sys
 import re
 import struct
-import os
+import json
+import bisect
+
 
 class DumpMapping():
     def from_dump(self, offset):
@@ -26,7 +27,10 @@ class ShannonMemoryDump(DumpMapping):
         self.restore_start = restore_start
         self.restore_end = restore_end
         self.dump_base = dump_base
+        self.path = path
         self.heap = ShannonHeap(path, self.dump, restore_start, restore_end, dump_base)
+        self.metadata = {}
+        self.stack = []
 
 
     def get(self, addr, length):
@@ -35,6 +39,65 @@ class ShannonMemoryDump(DumpMapping):
             return bytes(self.dump[offset:offset+length])
         return None
 
+    def print_metadata(self):
+        print(json.dumps({k: [{k2 : hex(v2) for k2, v2 in vv.items()} for vv in v] for k,v in self.metadata.items()}, indent=4))
+
+
+    
+
+    def dump_metadata_to_file(self, path):
+        # restore_start, restore_end, dump_base, heap_metadata_start, heap_start, heap_end, filtered
+        filtered = []
+        for key, vals in self.metadata.items():
+            if(key == "STACK"):
+                continue
+            for val in vals:
+                idx = bisect.bisect_left(filtered, val["start"], key=lambda x: x["start"])
+                filtered.insert(idx, val)
+                
+                if(idx > 0):
+                    if(filtered[idx]["start"] <= filtered[idx-1]["end"]):
+                        assert(filtered[idx]["start"] >= filtered[idx-1]["start"])
+                        filtered[idx]["start"] = filtered[idx-1]["start"]
+                        if(filtered[idx-1]["end"] >= filtered[idx]["end"]):
+                            filtered[idx]["end"] = filtered[idx - 1]["end"]
+                        del(filtered[idx-1])
+
+                while(idx < len(filtered) - 1):
+                    if(filtered[idx]["end"] >= filtered[idx + 1]["start"]):
+                        if(filtered[idx]["end"] <= filtered[idx + 1]["end"]):
+                            filtered[idx]["end"] = filtered[idx + 1]["end"]
+                            del(filtered[idx + 1])
+                            break
+                        else:
+                            del(filtered[idx + 1])                
+                    else:
+                        break
+        
+        metadata =  {
+                        "restore_start" : hex(self.restore_start),
+                        "restore_end" : hex(self.restore_end),
+                        "dump_base" : hex(self.dump_base),
+                        "heap_metadata_start": hex(self.heap.heap_metadata_start),
+                        "heap_start" : hex(self.heap.heap_start),
+                        "heap_end" : hex(self.heap.heap_end),
+                        # "filter" : [{k : hex(v)  for k,v in obj.items() } for obj in filtered]
+                    }
+        
+        if(len(filtered) > 0):
+            metadata["filter"] = [{k : hex(v)  for k,v in obj.items() } for obj in filtered]
+
+        if("STACK" in self.metadata):
+            metadata["stack"] = [{k : hex(v)  for k,v in obj.items() } for obj in
+                                 sorted(self.metadata["STACK"], key = lambda x: x["start"])]
+
+        with open(path, "w") as f:
+            f.write(json.dumps
+                (
+                    metadata,
+                    indent = 4
+                )
+            )
 
 
 class ShannonHeap(DumpMapping):
