@@ -3,3 +3,6 @@
 # Import vendor plugins
 import firmwire.vendor.shannon
 import firmwire.vendor.mtk
+
+# ThreadX test board
+import firmwire.vendor.threadx_test

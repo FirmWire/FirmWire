@@ -7,3 +7,10 @@ __pycache__
 
 # Firmware
 *_workspace/
+
+# ThreadX test output and local backups
+sample_threadx*.out
+sample_threadx*.map
+*.qcow2
+*.before_threadx_cli
+*.before_shannon_timer
